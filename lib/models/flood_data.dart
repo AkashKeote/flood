@@ -29,8 +29,12 @@ class FloodData {
       temperature: (json['temperature'] ?? 0.0).toDouble(),
       humidity: (json['humidity'] ?? 0.0).toDouble(),
       rainfall: (json['rainfall'] ?? 0.0).toDouble(),
-      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
-      alerts: (json['alerts'] as List? ?? []).map((e) => FloodAlert.fromJson(e)).toList(),
+      timestamp: DateTime.parse(
+        json['timestamp'] ?? DateTime.now().toIso8601String(),
+      ),
+      alerts: (json['alerts'] as List? ?? [])
+          .map((e) => FloodAlert.fromJson(e))
+          .toList(),
     );
   }
 
@@ -68,7 +72,9 @@ class FloodAlert {
       id: json['id'] ?? '',
       message: json['message'] ?? '',
       severity: json['severity'] ?? 'info',
-      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
+      timestamp: DateTime.parse(
+        json['timestamp'] ?? DateTime.now().toIso8601String(),
+      ),
       location: json['location'] ?? '',
     );
   }
@@ -93,7 +99,12 @@ class FloodDataService {
     'Dadar, Mumbai',
   ];
 
-  static final List<String> _riskLevels = ['Low', 'Moderate', 'High', 'Critical'];
+  static final List<String> _riskLevels = [
+    'Low',
+    'Moderate',
+    'High',
+    'Critical',
+  ];
 
   static FloodData getMockData() {
     final random = Random();
@@ -130,23 +141,32 @@ class FloodDataService {
     final random = Random();
 
     if (riskLevel == 'High' || riskLevel == 'Critical') {
-      alerts.add(FloodAlert(
-        id: 'alert_${DateTime.now().millisecondsSinceEpoch}',
-        message: 'High water levels detected in $area. Evacuation recommended.',
-        severity: 'warning',
-        timestamp: DateTime.now().subtract(Duration(minutes: random.nextInt(60))),
-        location: area,
-      ));
+      alerts.add(
+        FloodAlert(
+          id: 'alert_${DateTime.now().millisecondsSinceEpoch}',
+          message:
+              'High water levels detected in $area. Evacuation recommended.',
+          severity: 'warning',
+          timestamp: DateTime.now().subtract(
+            Duration(minutes: random.nextInt(60)),
+          ),
+          location: area,
+        ),
+      );
     }
 
     if (random.nextBool()) {
-      alerts.add(FloodAlert(
-        id: 'alert_${DateTime.now().millisecondsSinceEpoch + 1}',
-        message: 'Heavy rainfall expected in next 2 hours.',
-        severity: 'info',
-        timestamp: DateTime.now().subtract(Duration(minutes: random.nextInt(30))),
-        location: area,
-      ));
+      alerts.add(
+        FloodAlert(
+          id: 'alert_${DateTime.now().millisecondsSinceEpoch + 1}',
+          message: 'Heavy rainfall expected in next 2 hours.',
+          severity: 'info',
+          timestamp: DateTime.now().subtract(
+            Duration(minutes: random.nextInt(30)),
+          ),
+          location: area,
+        ),
+      );
     }
 
     return alerts;
@@ -155,7 +175,7 @@ class FloodDataService {
   static List<FloodData> getHistoricalData() {
     final data = <FloodData>[];
     final random = Random();
-    
+
     for (int i = 7; i >= 0; i--) {
       final date = DateTime.now().subtract(Duration(days: i));
       final area = _areas[random.nextInt(_areas.length)];
@@ -165,18 +185,20 @@ class FloodDataService {
       final humidity = 55.0 + random.nextDouble() * 35.0;
       final rainfall = random.nextDouble() * 60.0;
 
-      data.add(FloodData(
-        area: area,
-        waterLevel: waterLevel,
-        riskLevel: riskLevel,
-        temperature: temperature,
-        humidity: humidity,
-        rainfall: rainfall,
-        timestamp: date,
-        alerts: _generateAlerts(area, riskLevel),
-      ));
+      data.add(
+        FloodData(
+          area: area,
+          waterLevel: waterLevel,
+          riskLevel: riskLevel,
+          temperature: temperature,
+          humidity: humidity,
+          rainfall: rainfall,
+          timestamp: date,
+          alerts: _generateAlerts(area, riskLevel),
+        ),
+      );
     }
 
     return data;
   }
-} 
+}

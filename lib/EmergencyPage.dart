@@ -64,7 +64,10 @@ class _EmergencyPageState extends State<EmergencyPage> {
         children: [
           // Header
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
+            padding: const EdgeInsets.symmetric(
+              vertical: 32.0,
+              horizontal: 24.0,
+            ),
             child: Text(
               'Emergency Response\nQuick Actions',
               style: GoogleFonts.poppins(
@@ -86,7 +89,9 @@ class _EmergencyPageState extends State<EmergencyPage> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: (_isSOSActive ? Color(0xFFF44336) : Color(0xFF4CAF50)).withOpacity(0.3),
+                    color:
+                        (_isSOSActive ? Color(0xFFF44336) : Color(0xFF4CAF50))
+                            .withOpacity(0.3),
                     blurRadius: 16,
                     offset: Offset(0, 8),
                   ),
@@ -102,7 +107,9 @@ class _EmergencyPageState extends State<EmergencyPage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          _isSOSActive ? Icons.emergency_rounded : Icons.sos_rounded,
+                          _isSOSActive
+                              ? Icons.emergency_rounded
+                              : Icons.sos_rounded,
                           color: Colors.white,
                           size: 32,
                         ),
@@ -170,7 +177,8 @@ class _EmergencyPageState extends State<EmergencyPage> {
               children: [
                 _ProtocolCard(
                   title: 'Flood Evacuation',
-                  description: 'Move to higher ground immediately. Do not walk through moving water.',
+                  description:
+                      'Move to higher ground immediately. Do not walk through moving water.',
                   icon: Icons.directions_run_rounded,
                   color: Color(0xFFFF6B6B),
                   onTap: () => _showProtocolDetails('Flood Evacuation'),
@@ -178,7 +186,8 @@ class _EmergencyPageState extends State<EmergencyPage> {
                 SizedBox(height: 12),
                 _ProtocolCard(
                   title: 'Emergency Kit',
-                  description: 'Keep essential items ready: water, food, medicines, documents.',
+                  description:
+                      'Keep essential items ready: water, food, medicines, documents.',
                   icon: Icons.medical_services_rounded,
                   color: Color(0xFF4CAF50),
                   onTap: () => _showProtocolDetails('Emergency Kit'),
@@ -186,7 +195,8 @@ class _EmergencyPageState extends State<EmergencyPage> {
                 SizedBox(height: 12),
                 _ProtocolCard(
                   title: 'Stay Informed',
-                  description: 'Monitor weather updates and official announcements.',
+                  description:
+                      'Monitor weather updates and official announcements.',
                   icon: Icons.info_rounded,
                   color: Color(0xFF2196F3),
                   onTap: () => _showProtocolDetails('Stay Informed'),
@@ -215,18 +225,20 @@ class _EmergencyPageState extends State<EmergencyPage> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Column(
-              children: _emergencyContacts.map((contact) => 
-                Padding(
-                  padding: EdgeInsets.only(bottom: 12),
-                  child: _ComicContactCard(
-                    icon: contact.icon,
-                    title: contact.name,
-                    number: contact.number,
-                    color: contact.color,
-                    onTap: () => _callEmergency(contact),
-                  ),
-                ),
-              ).toList(),
+              children: _emergencyContacts
+                  .map(
+                    (contact) => Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: _ComicContactCard(
+                        icon: contact.icon,
+                        title: contact.name,
+                        number: contact.number,
+                        color: contact.color,
+                        onTap: () => _callEmergency(contact),
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
 
@@ -265,7 +277,9 @@ class _EmergencyPageState extends State<EmergencyPage> {
             Text('SOS ACTIVATED'),
           ],
         ),
-        content: Text('Emergency services are being notified. Stay calm and follow instructions.'),
+        content: Text(
+          'Emergency services are being notified. Stay calm and follow instructions.',
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -457,10 +471,7 @@ class _ProtocolCard extends StatelessWidget {
                     SizedBox(height: 4),
                     Text(
                       description,
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
                     ),
                   ],
                 ),
@@ -685,10 +696,7 @@ class _ComicTipItem extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              color: Color(0xFF22223B),
-              fontSize: 14,
-            ),
+            style: TextStyle(color: Color(0xFF22223B), fontSize: 14),
           ),
         ),
       ],

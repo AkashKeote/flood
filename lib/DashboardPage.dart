@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'models/flood_data.dart';
+import 'services/weather_service.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -11,31 +12,53 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   late FloodData _currentData;
-  late List<FloodData> _historicalData;
+  late List<FloodData> _allCitiesData;
   bool _isLoading = true;
+  String _selectedCity = 'Andheri';
+  List<String> _availableCities = [];
 
   @override
   void initState() {
     super.initState();
+    _availableCities = WeatherService.getMumbaiCities();
     _loadData();
   }
 
-  void _loadData() {
+  void _loadData() async {
     setState(() {
       _isLoading = true;
     });
 
-    // Simulate API call delay
-    Future.delayed(Duration(milliseconds: 800), () {
+    try {
+      // Load data for selected city
+      final cityData = await WeatherService.getRealTimeData(_selectedCity);
+      
+      // Load data for all cities (for overview)
+      final allCitiesData = await WeatherService.getAllMumbaiCitiesData();
+      
       setState(() {
-        _currentData = FloodDataService.getMockData();
-        _historicalData = FloodDataService.getHistoricalData();
+        _currentData = cityData;
+        _allCitiesData = allCitiesData;
         _isLoading = false;
       });
-    });
+    } catch (e) {
+      // Fallback to mock data
+      setState(() {
+        _currentData = FloodDataService.getMockData();
+        _allCitiesData = FloodDataService.getHistoricalData();
+        _isLoading = false;
+      });
+    }
   }
 
   void _refreshData() {
+    _loadData();
+  }
+
+  void _changeCity(String city) {
+    setState(() {
+      _selectedCity = city;
+    });
     _loadData();
   }
 
@@ -52,7 +75,7 @@ class _DashboardPageState extends State<DashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
+            // Header with city selector
             Padding(
               padding: const EdgeInsets.symmetric(
                 vertical: 32.0,
@@ -62,13 +85,20 @@ class _DashboardPageState extends State<DashboardPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      'Hello, Akash!\nStay safe this monsoon.',
-                      style: GoogleFonts.poppins(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF22223B),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hello, Akash!\nStay safe this monsoon.',
+                          style: GoogleFonts.poppins(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF22223B),
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        _buildCitySelector(),
+                      ],
                     ),
                   ),
                   IconButton(
@@ -79,6 +109,23 @@ class _DashboardPageState extends State<DashboardPage> {
                 ],
               ),
             ),
+            
+            // Mumbai Cities Overview
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18.0),
+              child: Text(
+                'Mumbai Cities Overview',
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF22223B),
+                ),
+              ),
+            ),
+            SizedBox(height: 14),
+            _buildCitiesOverview(),
+            SizedBox(height: 28),
+
             // Quick Stats Cards
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -129,9 +176,16 @@ class _DashboardPageState extends State<DashboardPage> {
               child: Wrap(
                 spacing: 10,
                 children: [
-                  _PastelChip(label: _currentData.area.split(',')[0], color: Color(0xFFF9E79F)),
-                  _PastelChip(label: _currentData.alerts.isNotEmpty ? 'Alert' : 'Safe', 
-                    color: _currentData.alerts.isNotEmpty ? Color(0xFFFF6B6B) : Color(0xFFB5C7F7)),
+                  _PastelChip(
+                    label: _currentData.area.split(',')[0],
+                    color: Color(0xFFF9E79F),
+                  ),
+                  _PastelChip(
+                    label: _currentData.alerts.isNotEmpty ? 'Alert' : 'Safe',
+                    color: _currentData.alerts.isNotEmpty
+                        ? Color(0xFFFF6B6B)
+                        : Color(0xFFB5C7F7),
+                  ),
                 ],
               ),
             ),
@@ -176,7 +230,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     SizedBox(height: 8),
                     Text(
                       'Risk: ${_currentData.riskLevel}',
-                      style: TextStyle(color: _getRiskColor(_currentData.riskLevel)),
+                      style: TextStyle(
+                        color: _getRiskColor(_currentData.riskLevel),
+                      ),
                     ),
                     SizedBox(height: 8),
                     Text(
@@ -215,7 +271,9 @@ class _DashboardPageState extends State<DashboardPage> {
                 ),
               ),
               SizedBox(height: 14),
-              ..._currentData.alerts.map((alert) => _buildAlertCard(alert)).toList(),
+              ..._currentData.alerts
+                  .map((alert) => _buildAlertCard(alert))
+                  .toList(),
               SizedBox(height: 28),
             ],
             // Quick Actions
@@ -271,6 +329,110 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Widget _buildCitySelector() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Color(0xFFB5C7F7)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedCity,
+          icon: Icon(Icons.arrow_drop_down, color: Color(0xFF22223B)),
+          style: TextStyle(
+            color: Color(0xFF22223B),
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              _changeCity(newValue);
+            }
+          },
+          items: _availableCities.map<DropdownMenuItem<String>>((String city) {
+            return DropdownMenuItem<String>(
+              value: city,
+              child: Text(city),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCitiesOverview() {
+    return Container(
+      height: 120,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _allCitiesData.length,
+        itemBuilder: (context, index) {
+          final cityData = _allCitiesData[index];
+          return Container(
+            width: 140,
+            margin: EdgeInsets.only(right: 12),
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  cityData.area.split(',')[0],
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _getRiskColor(cityData.riskLevel),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      cityData.riskLevel,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _getRiskColor(cityData.riskLevel),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 4),
+                Text(
+                  '${cityData.waterLevel.toStringAsFixed(1)}m',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF22223B),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildLoadingState() {
     return Center(
       child: Column(
@@ -282,10 +444,7 @@ class _DashboardPageState extends State<DashboardPage> {
           SizedBox(height: 16),
           Text(
             'Loading flood data...',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              color: Color(0xFF22223B),
-            ),
+            style: GoogleFonts.poppins(fontSize: 16, color: Color(0xFF22223B)),
           ),
         ],
       ),
@@ -310,11 +469,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         child: Row(
           children: [
-            Icon(
-              _getAlertIcon(alert.severity),
-              color: Colors.white,
-              size: 24,
-            ),
+            Icon(_getAlertIcon(alert.severity), color: Colors.white, size: 24),
             SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -418,7 +573,7 @@ class _DashboardPageState extends State<DashboardPage> {
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final difference = now.difference(time);
-    
+
     if (difference.inMinutes < 60) {
       return '${difference.inMinutes}m ago';
     } else if (difference.inHours < 24) {
@@ -433,7 +588,9 @@ class _DashboardPageState extends State<DashboardPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Report Flood'),
-        content: Text('This feature will allow users to report flood incidents in their area.'),
+        content: Text(
+          'This feature will allow users to report flood incidents in their area.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -449,7 +606,9 @@ class _DashboardPageState extends State<DashboardPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Emergency Contact'),
-        content: Text('Calling emergency services...\n\nEmergency: 100\nFlood Control: 022-24937746'),
+        content: Text(
+          'Calling emergency services...\n\nEmergency: 100\nFlood Control: 022-24937746',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -462,9 +621,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _navigateToMap() {
     // This will be handled by the main navigation
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Navigating to Map...')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Navigating to Map...')));
   }
 }
 
