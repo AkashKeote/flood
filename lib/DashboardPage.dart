@@ -53,7 +53,7 @@ class DashboardPage extends StatelessWidget {
             child: Wrap(
               spacing: 10,
               children: [
-                _PastelChip(label: 'Drainage', color: Color(0xFFD6EAF8)),
+                //_PastelChip(label: 'Drainage', color: Color(0xFFD6EAF8)),
                 _PastelChip(label: 'River', color: Color(0xFFF9E79F)),
                 _PastelChip(label: 'Alert', color: Color(0xFFB5C7F7)),
               ],
