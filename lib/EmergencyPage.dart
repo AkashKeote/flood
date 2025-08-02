@@ -1,8 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
 
-class EmergencyPage extends StatelessWidget {
+class EmergencyPage extends StatefulWidget {
   const EmergencyPage({super.key});
+
+  @override
+  State<EmergencyPage> createState() => _EmergencyPageState();
+}
+
+class _EmergencyPageState extends State<EmergencyPage> {
+  bool _isSOSActive = false;
+  final List<EmergencyContact> _emergencyContacts = [
+    EmergencyContact(
+      name: 'Police Control',
+      number: '100',
+      icon: Icons.local_police_rounded,
+      color: Color(0xFFD6EAF8),
+      description: 'General emergency and police assistance',
+    ),
+    EmergencyContact(
+      name: 'Fire Brigade',
+      number: '101',
+      icon: Icons.fire_truck_rounded,
+      color: Color(0xFFF9E79F),
+      description: 'Fire emergencies and rescue operations',
+    ),
+    EmergencyContact(
+      name: 'Ambulance',
+      number: '102',
+      icon: Icons.medical_services_rounded,
+      color: Color(0xFFFF6B6B),
+      description: 'Medical emergencies and ambulance service',
+    ),
+    EmergencyContact(
+      name: 'Flood Control',
+      number: '022-24937746',
+      icon: Icons.water_drop_rounded,
+      color: Color(0xFFB5C7F7),
+      description: 'Mumbai flood control and drainage',
+    ),
+    EmergencyContact(
+      name: 'NDRF Helpline',
+      number: '011-23438000',
+      icon: Icons.security_rounded,
+      color: Color(0xFF4CAF50),
+      description: 'National Disaster Response Force',
+    ),
+    EmergencyContact(
+      name: 'Weather Alert',
+      number: '1800-180-1717',
+      icon: Icons.cloud_rounded,
+      color: Color(0xFFE8F4FD),
+      description: 'Weather updates and storm warnings',
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -12,8 +64,7 @@ class EmergencyPage extends StatelessWidget {
         children: [
           // Header
           Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
+            padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
             child: Text(
               'Emergency Response\nQuick Actions',
               style: GoogleFonts.poppins(
@@ -23,6 +74,56 @@ class EmergencyPage extends StatelessWidget {
               ),
             ),
           ),
+
+          // SOS Button
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Container(
+              width: double.infinity,
+              height: 80,
+              decoration: BoxDecoration(
+                color: _isSOSActive ? Color(0xFFF44336) : Color(0xFF4CAF50),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: (_isSOSActive ? Color(0xFFF44336) : Color(0xFF4CAF50)).withOpacity(0.3),
+                    blurRadius: 16,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: _toggleSOS,
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _isSOSActive ? Icons.emergency_rounded : Icons.sos_rounded,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          _isSOSActive ? 'SOS ACTIVE' : 'SOS EMERGENCY',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          SizedBox(height: 24),
 
           // Emergency Stats
           Padding(
@@ -48,16 +149,48 @@ class EmergencyPage extends StatelessWidget {
 
           SizedBox(height: 24),
 
-          // Emergency Chips
+          // Emergency Protocols
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18.0),
-            child: Wrap(
-              spacing: 10,
+            child: Text(
+              'Emergency Protocols',
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF22223B),
+              ),
+            ),
+          ),
+
+          SizedBox(height: 14),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
               children: [
-                _ComicChip(label: 'Police', color: Color(0xFFD6EAF8)),
-                _ComicChip(label: 'Fire', color: Color(0xFFF9E79F)),
-                _ComicChip(label: 'Medical', color: Color(0xFFB5C7F7)),
-                _ComicChip(label: 'Rescue', color: Color(0xFFE8D5C4)),
+                _ProtocolCard(
+                  title: 'Flood Evacuation',
+                  description: 'Move to higher ground immediately. Do not walk through moving water.',
+                  icon: Icons.directions_run_rounded,
+                  color: Color(0xFFFF6B6B),
+                  onTap: () => _showProtocolDetails('Flood Evacuation'),
+                ),
+                SizedBox(height: 12),
+                _ProtocolCard(
+                  title: 'Emergency Kit',
+                  description: 'Keep essential items ready: water, food, medicines, documents.',
+                  icon: Icons.medical_services_rounded,
+                  color: Color(0xFF4CAF50),
+                  onTap: () => _showProtocolDetails('Emergency Kit'),
+                ),
+                SizedBox(height: 12),
+                _ProtocolCard(
+                  title: 'Stay Informed',
+                  description: 'Monitor weather updates and official announcements.',
+                  icon: Icons.info_rounded,
+                  color: Color(0xFF2196F3),
+                  onTap: () => _showProtocolDetails('Stay Informed'),
+                ),
               ],
             ),
           ),
@@ -82,151 +215,260 @@ class EmergencyPage extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16.0),
             child: Column(
-              children: [
-                _ComicContactCard(
-                  icon: Icons.local_police_rounded,
-                  title: 'Police Control',
-                  number: '100',
-                  color: Color(0xFFD6EAF8),
-                  onTap: () {},
-                ),
-                SizedBox(height: 12),
-                _ComicContactCard(
-                  icon: Icons.fire_truck_rounded,
-                  title: 'Fire Brigade',
-                  number: '101',
-                  color: Color(0xFFF9E79F),
-                  onTap: () {},
-                ),
-                SizedBox(height: 12),
-                _ComicContactCard(
-                  icon: Icons.medical_services_rounded,
-                  title: 'Ambulance',
-                  number: '102',
-                  color: Color(0xFFB5C7F7),
-                  onTap: () {},
-                ),
-                SizedBox(height: 12),
-                _ComicContactCard(
-                  icon: Icons.emergency_rounded,
-                  title: 'Disaster Management',
-                  number: '1070',
-                  color: Color(0xFFE8D5C4),
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ),
-
-          SizedBox(height: 28),
-
-          // Quick Actions
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18.0),
-            child: Text(
-              'Quick Actions',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF22223B),
-              ),
-            ),
-          ),
-
-          SizedBox(height: 14),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _ComicActionCard(
-                    icon: Icons.sos_rounded,
-                    label: 'SOS Alert',
-                    color: Color(0xFFF9E79F),
-                    onTap: () {},
+              children: _emergencyContacts.map((contact) => 
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: _ComicContactCard(
+                    icon: contact.icon,
+                    title: contact.name,
+                    number: contact.number,
+                    color: contact.color,
+                    onTap: () => _callEmergency(contact),
                   ),
                 ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: _ComicActionCard(
-                    icon: Icons.location_on_rounded,
-                    label: 'Share Location',
-                    color: Color(0xFFD6EAF8),
-                    onTap: () {},
-                  ),
-                ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: _ComicActionCard(
-                    icon: Icons.volume_up_rounded,
-                    label: 'Emergency Call',
-                    color: Color(0xFFB5C7F7),
-                    onTap: () {},
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          SizedBox(height: 28),
-
-          // Safety Tips
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18.0),
-            child: Text(
-              'Safety Tips',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF22223B),
-              ),
-            ),
-          ),
-
-          SizedBox(height: 14),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Container(
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.08),
-                    blurRadius: 16,
-                    offset: Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  _ComicTipItem(
-                    icon: Icons.stay_current_portrait_rounded,
-                    text: 'Keep your phone charged',
-                    color: Color(0xFFD6EAF8),
-                  ),
-                  SizedBox(height: 12),
-                  _ComicTipItem(
-                    icon: Icons.family_restroom_rounded,
-                    text: 'Stay with family members',
-                    color: Color(0xFFF9E79F),
-                  ),
-                  SizedBox(height: 12),
-                  _ComicTipItem(
-                    icon: Icons.high_quality_rounded,
-                    text: 'Follow official instructions',
-                    color: Color(0xFFB5C7F7),
-                  ),
-                ],
-              ),
+              ).toList(),
             ),
           ),
 
           SizedBox(height: 32),
         ],
+      ),
+    );
+  }
+
+  void _toggleSOS() {
+    setState(() {
+      _isSOSActive = !_isSOSActive;
+    });
+
+    if (_isSOSActive) {
+      _showSOSDialog();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('SOS deactivated'),
+          backgroundColor: Color(0xFF4CAF50),
+        ),
+      );
+    }
+  }
+
+  void _showSOSDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.emergency_rounded, color: Color(0xFFF44336)),
+            SizedBox(width: 8),
+            Text('SOS ACTIVATED'),
+          ],
+        ),
+        content: Text('Emergency services are being notified. Stay calm and follow instructions.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {
+                _isSOSActive = false;
+              });
+            },
+            child: Text('Cancel SOS'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _callEmergency(EmergencyContact contact) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(contact.icon, color: contact.color),
+            SizedBox(width: 8),
+            Text(contact.name),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(contact.description),
+            SizedBox(height: 8),
+            Text('Number: ${contact.number}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _makeCall(contact.number);
+            },
+            child: Text('Call Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _makeCall(String number) {
+    // In a real app, this would use url_launcher package
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Calling $number...'),
+        backgroundColor: Color(0xFF4CAF50),
+      ),
+    );
+  }
+
+  void _showProtocolDetails(String protocol) {
+    String content = '';
+    switch (protocol) {
+      case 'Flood Evacuation':
+        content = '''
+• Move to higher ground immediately
+• Do not walk through moving water
+• Avoid driving through flooded areas
+• Stay away from downed power lines
+• Listen to emergency broadcasts
+• Follow evacuation orders
+        ''';
+        break;
+      case 'Emergency Kit':
+        content = '''
+• Water (1 gallon per person per day)
+• Non-perishable food
+• First aid kit and medicines
+• Flashlight and batteries
+• Important documents
+• Cash and credit cards
+• Phone charger and power bank
+        ''';
+        break;
+      case 'Stay Informed':
+        content = '''
+• Monitor weather updates
+• Listen to official announcements
+• Follow local emergency services
+• Check flood warnings regularly
+• Have multiple information sources
+• Share information with neighbors
+        ''';
+        break;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(protocol),
+        content: Text(content),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class EmergencyContact {
+  final String name;
+  final String number;
+  final IconData icon;
+  final Color color;
+  final String description;
+
+  EmergencyContact({
+    required this.name,
+    required this.number,
+    required this.icon,
+    required this.color,
+    required this.description,
+  });
+}
+
+class _ProtocolCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ProtocolCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.08),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 24),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey),
+            ],
+          ),
+        ),
       ),
     );
   }
