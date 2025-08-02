@@ -32,10 +32,10 @@ class _DashboardPageState extends State<DashboardPage> {
     try {
       // Load data for selected city
       final cityData = await WeatherService.getRealTimeData(_selectedCity);
-      
+
       // Load data for all cities (for overview)
       final allCitiesData = await WeatherService.getAllMumbaiCitiesData();
-      
+
       setState(() {
         _currentData = cityData;
         _allCitiesData = allCitiesData;
@@ -109,7 +109,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 ],
               ),
             ),
-            
+
             // Mumbai Cities Overview
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18.0),
@@ -352,10 +352,7 @@ class _DashboardPageState extends State<DashboardPage> {
             }
           },
           items: _availableCities.map<DropdownMenuItem<String>>((String city) {
-            return DropdownMenuItem<String>(
-              value: city,
-              child: Text(city),
-            );
+            return DropdownMenuItem<String>(value: city, child: Text(city));
           }).toList(),
         ),
       ),
@@ -391,10 +388,7 @@ class _DashboardPageState extends State<DashboardPage> {
               children: [
                 Text(
                   cityData.area.split(',')[0],
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
                 SizedBox(height: 8),
                 Row(
@@ -420,10 +414,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 SizedBox(height: 4),
                 Text(
                   '${cityData.waterLevel.toStringAsFixed(1)}m',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF22223B),
-                  ),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF22223B)),
                 ),
               ],
             ),

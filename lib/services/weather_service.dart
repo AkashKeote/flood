@@ -4,7 +4,7 @@ import '../models/flood_data.dart';
 
 class WeatherService {
   static const String _baseUrl = 'https://api.openweathermap.org/data/2.5';
-  static const String _apiKey = 'YOUR_API_KEY'; // Replace with your OpenWeather API key
+  static const String _apiKey = 'f215342ef6fb31829da6b26256b5d768'; // Real OpenWeather API key
   
   static final List<Map<String, dynamic>> _mumbaiCities = [
     {"name": "Andheri", "lat": 19.11227, "lon": 72.84067},
