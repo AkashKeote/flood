@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'models/flood_data.dart';
 import 'services/weather_service.dart';
 import 'services/user_service.dart';
+import 'services/firebase_service.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -64,6 +65,14 @@ class _DashboardPageState extends State<DashboardPage> {
       _selectedCity = city;
     });
     await UserService.updateSelectedCity(city);
+    
+    // Log analytics event
+    await FirebaseService.logEvent('city_changed', {
+      'previous_city': _selectedCity,
+      'new_city': city,
+      'user_name': UserService.getUserName(),
+    });
+    
     _loadData();
   }
 

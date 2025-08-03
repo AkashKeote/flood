@@ -10,10 +10,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'SplashScreen.dart';
 import 'LoginScreen.dart';
 import 'services/user_service.dart';
+import 'services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await UserService.initialize();
+  await FirebaseService.initialize();
   runApp(const FloodManagementApp());
 }
 

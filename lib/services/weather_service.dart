@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/flood_data.dart';
+import 'firebase_service.dart';
 
 class WeatherService {
   static const String _baseUrl = 'https://api.openweathermap.org/data/2.5';
@@ -171,7 +172,7 @@ class WeatherService {
         temperature,
       );
 
-      return FloodData(
+      final floodData = FloodData(
         area: '${city['name']}, Mumbai',
         waterLevel: waterLevel,
         riskLevel: riskLevel,
@@ -181,6 +182,30 @@ class WeatherService {
         timestamp: DateTime.now(),
         alerts: alerts,
       );
+
+      // Save to Firebase
+      try {
+        await FirebaseService.saveFloodData(city['name'], {
+          'area': floodData.area,
+          'waterLevel': floodData.waterLevel,
+          'riskLevel': floodData.riskLevel,
+          'temperature': floodData.temperature,
+          'humidity': floodData.humidity,
+          'rainfall': floodData.rainfall,
+          'timestamp': floodData.timestamp.toIso8601String(),
+          'alerts': floodData.alerts.map((alert) => {
+            'id': alert.id,
+            'message': alert.message,
+            'severity': alert.severity,
+            'timestamp': alert.timestamp.toIso8601String(),
+            'location': alert.location,
+          }).toList(),
+        });
+      } catch (e) {
+        print('Error saving flood data to Firebase: $e');
+      }
+
+      return floodData;
     } catch (e) {
       // Fallback to mock data if API fails
       return FloodDataService.getMockData();

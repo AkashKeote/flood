@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_data.dart';
+import 'firebase_service.dart';
 
 class UserService {
   static const String _userKey = 'user_data';
@@ -57,6 +58,13 @@ class UserService {
   // Login user
   static Future<bool> login(String name, String city) async {
     try {
+      // Sign in anonymously to Firebase
+      final userCredential = await FirebaseService.signInAnonymously();
+      if (userCredential == null) {
+        print('Failed to sign in to Firebase');
+        return false;
+      }
+
       _currentUser = UserData(
         name: name,
         selectedCity: city,
@@ -64,7 +72,21 @@ class UserService {
         isLoggedIn: true,
       );
       
+      // Save to local storage
       await _saveUserData();
+      
+      // Save to Firebase
+      await FirebaseService.saveUserData(
+        userCredential.user!.uid,
+        _currentUser!.toJson(),
+      );
+      
+      // Log analytics event
+      await FirebaseService.logEvent('user_login', {
+        'user_name': name,
+        'selected_city': city,
+      });
+      
       return true;
     } catch (e) {
       print('Error during login: $e');
@@ -75,6 +97,15 @@ class UserService {
   // Logout user
   static Future<void> logout() async {
     try {
+      // Log analytics event
+      await FirebaseService.logEvent('user_logout', {
+        'user_name': _currentUser?.name ?? '',
+        'selected_city': _currentUser?.selectedCity ?? '',
+      });
+      
+      // Sign out from Firebase
+      await FirebaseService.signOut();
+      
       _currentUser = UserData.empty();
       await _saveUserData();
     } catch (e) {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
+import 'services/firebase_service.dart';
+import 'services/user_service.dart';
 
 class EmergencyPage extends StatefulWidget {
   const EmergencyPage({super.key});
@@ -248,14 +250,26 @@ class _EmergencyPageState extends State<EmergencyPage> {
     );
   }
 
-  void _toggleSOS() {
+  void _toggleSOS() async {
     setState(() {
       _isSOSActive = !_isSOSActive;
     });
 
     if (_isSOSActive) {
+      // Log SOS activation to Firebase
+      await FirebaseService.logEvent('sos_activated', {
+        'user_name': UserService.getUserName(),
+        'user_city': UserService.getSelectedCity(),
+        'timestamp': DateTime.now().toIso8601String(),
+      });
       _showSOSDialog();
     } else {
+      // Log SOS deactivation to Firebase
+      await FirebaseService.logEvent('sos_deactivated', {
+        'user_name': UserService.getUserName(),
+        'user_city': UserService.getSelectedCity(),
+        'timestamp': DateTime.now().toIso8601String(),
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('SOS deactivated'),
@@ -295,7 +309,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
     );
   }
 
-  void _callEmergency(EmergencyContact contact) {
+  void _callEmergency(EmergencyContact contact) async {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -321,8 +335,16 @@ class _EmergencyPageState extends State<EmergencyPage> {
             child: Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
+              // Log emergency call to Firebase
+              await FirebaseService.logEvent('emergency_call', {
+                'contact_name': contact.name,
+                'contact_number': contact.number,
+                'user_name': UserService.getUserName(),
+                'user_city': UserService.getSelectedCity(),
+                'timestamp': DateTime.now().toIso8601String(),
+              });
               _makeCall(contact.number);
             },
             child: Text('Call Now'),
