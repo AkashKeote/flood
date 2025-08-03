@@ -24,8 +24,8 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
 
   void _loadCities() {
     _availableCities = WeatherService.getMumbaiCities();
-    _selectedCity = UserService.getSelectedCity().isNotEmpty 
-        ? UserService.getSelectedCity() 
+    _selectedCity = UserService.getSelectedCity().isNotEmpty
+        ? UserService.getSelectedCity()
         : 'Andheri';
   }
 
@@ -111,7 +111,7 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'AI Flood Prediction',
+                      'Advanced AI Flood Prediction',
                       style: GoogleFonts.poppins(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -120,7 +120,7 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Smart Analysis & Real-time Insights',
+                      'Powered by Grok-4 & Gemini AI',
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         color: Color(0xFF22223B).withOpacity(0.7),
@@ -132,8 +132,78 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                 ),
               ),
 
-              // AI Stats Cards
+              // AI Models Info
               if (_predictionData != null) ...[
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: Container(
+                    padding: EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'AI Models Used',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF22223B),
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.psychology_rounded,
+                              color: Color(0xFFB5C7F7),
+                              size: 20,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Grok-4 (OpenRouter)',
+                              style: TextStyle(
+                                color: Color(0xFF22223B),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.auto_awesome_rounded,
+                              color: Color(0xFFF9E79F),
+                              size: 20,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Gemini Pro (Google)',
+                              style: TextStyle(
+                                color: Color(0xFF22223B),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                SizedBox(height: 16),
+
+                // Enhanced AI Stats Cards
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 24),
                   child: Row(
@@ -141,7 +211,7 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                       Expanded(
                         child: _buildStatCard(
                           'AI Confidence',
-                          '${_predictionData!['confidencePercent']}%',
+                          '${_predictionData!['aiConfidence'] ?? 85}%',
                           Color(0xFFF9E79F),
                           Icons.psychology_rounded,
                         ),
@@ -188,6 +258,140 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
 
                 SizedBox(height: 24),
 
+                // Grok AI Analysis
+                if (_predictionData!['grokAnalysis'] != null) ...[
+                  _buildAIAnalysisSection(
+                    'Grok-4 AI Analysis',
+                    _predictionData!['grokAnalysis'],
+                    Color(0xFFB5C7F7),
+                    Icons.psychology_rounded,
+                  ),
+
+                  SizedBox(height: 16),
+                ],
+
+                // Gemini AI Analysis
+                if (_predictionData!['geminiAnalysis'] != null) ...[
+                  _buildAIAnalysisSection(
+                    'Gemini AI Analysis',
+                    _predictionData!['geminiAnalysis'],
+                    Color(0xFFF9E79F),
+                    Icons.auto_awesome_rounded,
+                  ),
+
+                  SizedBox(height: 16),
+                ],
+
+                // Combined AI Insights
+                if (_predictionData!['combinedInsights'] != null) ...[
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      'Combined AI Insights',
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF22223B),
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 12),
+
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24),
+                    child: Container(
+                      padding: EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.1),
+                            blurRadius: 10,
+                            offset: Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.lightbulb_rounded,
+                                color: Color(0xFFB5C7F7),
+                                size: 24,
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                'AI Recommendations',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF22223B),
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 16),
+                          if (_predictionData!['combinedInsights']['insights'] !=
+                              null)
+                            ...(_predictionData!['combinedInsights']['insights']
+                                    as List)
+                                .map<Widget>((insight) {
+                                  return Padding(
+                                    padding: EdgeInsets.only(bottom: 8),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(
+                                          Icons.check_circle_rounded,
+                                          color: Color(0xFF4CAF50),
+                                          size: 16,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            insight.toString(),
+                                            style: TextStyle(
+                                              color: Color(0xFF22223B),
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                })
+                                .toList(),
+                          SizedBox(height: 16),
+                          if (_predictionData!['combinedInsights']['emergencyAdvice'] !=
+                              null)
+                            _buildInsightItem(
+                              'Emergency Advice',
+                              _predictionData!['combinedInsights']['emergencyAdvice'],
+                              Icons.emergency_rounded,
+                              Color(0xFFFF5722),
+                            ),
+                          SizedBox(height: 12),
+                          if (_predictionData!['combinedInsights']['safetyMeasures'] !=
+                              null)
+                            _buildInsightItem(
+                              'Safety Measures',
+                              _predictionData!['combinedInsights']['safetyMeasures'],
+                              Icons.security_rounded,
+                              Color(0xFF4CAF50),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 24),
+                ],
+
                 // Risk Factors
                 Padding(
                   padding: EdgeInsets.symmetric(horizontal: 24),
@@ -210,7 +414,10 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                     runSpacing: 8,
                     children: _predictionData!['factors'].map<Widget>((factor) {
                       return Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Color(0xFFB5C7F7),
                           borderRadius: BorderRadius.circular(16),
@@ -229,68 +436,6 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                 ),
 
                 SizedBox(height: 24),
-
-                // AI Insights
-                if (_predictionData!['insights'].isNotEmpty) ...[
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24),
-                    child: Text(
-                      'AI Insights',
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF22223B),
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 12),
-
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      children: _predictionData!['insights'].map<Widget>((insight) {
-                        return Container(
-                          width: double.infinity,
-                          margin: EdgeInsets.only(bottom: 8),
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.grey.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.lightbulb_rounded,
-                                color: Color(0xFFB5C7F7),
-                                size: 20,
-                              ),
-                              SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  insight,
-                                  style: TextStyle(
-                                    color: Color(0xFF22223B),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-
-                  SizedBox(height: 24),
-                ],
 
                 // Weather Data
                 Padding(
@@ -324,15 +469,35 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                     ),
                     child: Column(
                       children: [
-                        _buildWeatherRow('Temperature', '${_predictionData!['weatherData']['temperature'].toStringAsFixed(1)}°C', Icons.thermostat_rounded),
+                        _buildWeatherRow(
+                          'Temperature',
+                          '${_predictionData!['weatherData']['temperature'].toStringAsFixed(1)}°C',
+                          Icons.thermostat_rounded,
+                        ),
                         SizedBox(height: 12),
-                        _buildWeatherRow('Pressure', '${_predictionData!['weatherData']['pressure'].toStringAsFixed(0)} hPa', Icons.speed_rounded),
+                        _buildWeatherRow(
+                          'Pressure',
+                          '${_predictionData!['weatherData']['pressure'].toStringAsFixed(0)} hPa',
+                          Icons.speed_rounded,
+                        ),
                         SizedBox(height: 12),
-                        _buildWeatherRow('Wind Speed', '${_predictionData!['weatherData']['windSpeed'].toStringAsFixed(1)} m/s', Icons.air_rounded),
+                        _buildWeatherRow(
+                          'Wind Speed',
+                          '${_predictionData!['weatherData']['windSpeed'].toStringAsFixed(1)} m/s',
+                          Icons.air_rounded,
+                        ),
                         SizedBox(height: 12),
-                        _buildWeatherRow('Visibility', '${(_predictionData!['weatherData']['visibility'] / 1000).toStringAsFixed(1)} km', Icons.visibility_rounded),
+                        _buildWeatherRow(
+                          'Visibility',
+                          '${(_predictionData!['weatherData']['visibility'] / 1000).toStringAsFixed(1)} km',
+                          Icons.visibility_rounded,
+                        ),
                         SizedBox(height: 12),
-                        _buildWeatherRow('Rainy Hours', '${_predictionData!['weatherData']['rainyHours']} hours', Icons.schedule_rounded),
+                        _buildWeatherRow(
+                          'Rainy Hours',
+                          '${_predictionData!['weatherData']['rainyHours']} hours',
+                          Icons.schedule_rounded,
+                        ),
                       ],
                     ),
                   ),
@@ -374,7 +539,7 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                               Icon(Icons.psychology_rounded, size: 20),
                               SizedBox(width: 8),
                               Text(
-                                'Get AI Prediction',
+                                'Get Advanced AI Prediction',
                                 style: GoogleFonts.poppins(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -391,6 +556,137 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAIAnalysisSection(
+    String title,
+    Map<String, dynamic> analysis,
+    Color color,
+    IconData icon,
+  ) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 24),
+      child: Container(
+        padding: EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              blurRadius: 10,
+              offset: Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: color, size: 24),
+                SizedBox(width: 12),
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF22223B),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            if (analysis['analysis'] != null)
+              _buildAnalysisItem('Analysis', analysis['analysis']),
+            if (analysis['recommendations'] != null)
+              _buildAnalysisItem(
+                'Recommendations',
+                analysis['recommendations'],
+              ),
+            if (analysis['weatherAnalysis'] != null)
+              _buildAnalysisItem(
+                'Weather Analysis',
+                analysis['weatherAnalysis'],
+              ),
+            if (analysis['floodRisk'] != null)
+              _buildAnalysisItem('Flood Risk', analysis['floodRisk']),
+            if (analysis['safetyTips'] != null)
+              _buildAnalysisItem('Safety Tips', analysis['safetyTips']),
+            if (analysis['emergencyAdvice'] != null)
+              _buildAnalysisItem(
+                'Emergency Advice',
+                analysis['emergencyAdvice'],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnalysisItem(String label, String content) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF22223B),
+              fontSize: 14,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            content,
+            style: TextStyle(
+              color: Color(0xFF22223B).withOpacity(0.8),
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInsightItem(
+    String label,
+    String content,
+    IconData icon,
+    Color color,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color, size: 20),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF22223B),
+                  fontSize: 14,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                content,
+                style: TextStyle(
+                  color: Color(0xFF22223B).withOpacity(0.8),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -424,7 +720,12 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(

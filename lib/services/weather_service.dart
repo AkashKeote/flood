@@ -1,12 +1,13 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import '../models/flood_data.dart';
 import 'firebase_service.dart';
+import 'ai_service.dart'; // Added AI service import
 
 class WeatherService {
+  static const String _apiKey = '8c2c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c';
   static const String _baseUrl = 'https://api.openweathermap.org/data/2.5';
-  static const String _apiKey =
-      'f215342ef6fb31829da6b26256b5d768'; // Real OpenWeather API key
 
   static final List<Map<String, dynamic>> _mumbaiCities = [
     // Ward A
@@ -306,7 +307,7 @@ class WeatherService {
     return _mumbaiCities.map((city) => city['name'] as String).toList();
   }
 
-  // AI-powered flood prediction methods
+  // Enhanced AI-powered flood prediction with multiple AI models
   static Future<Map<String, dynamic>> getAIPrediction(String cityName) async {
     try {
       // Find city coordinates
@@ -316,13 +317,16 @@ class WeatherService {
       );
 
       // Get current weather and forecast data
-      final weatherUrl = '$_baseUrl/weather?lat=${city['lat']}&lon=${city['lon']}&appid=$_apiKey&units=metric';
+      final weatherUrl =
+          '$_baseUrl/weather?lat=${city['lat']}&lon=${city['lon']}&appid=$_apiKey&units=metric';
       final weatherResponse = await http.get(Uri.parse(weatherUrl));
 
-      final forecastUrl = '$_baseUrl/forecast?lat=${city['lat']}&lon=${city['lon']}&appid=$_apiKey&units=metric';
+      final forecastUrl =
+          '$_baseUrl/forecast?lat=${city['lat']}&lon=${city['lon']}&appid=$_apiKey&units=metric';
       final forecastResponse = await http.get(Uri.parse(forecastUrl));
 
-      if (weatherResponse.statusCode != 200 || forecastResponse.statusCode != 200) {
+      if (weatherResponse.statusCode != 200 ||
+          forecastResponse.statusCode != 200) {
         throw Exception('Failed to fetch weather data for AI prediction');
       }
 
@@ -341,15 +345,16 @@ class WeatherService {
       double maxRainfall = 0.0;
       int rainyHours = 0;
 
-      for (var item in forecastData['list'].take(24)) { // 24 hours forecast
+      for (var item in forecastData['list'].take(24)) {
+        // 24 hours forecast
         final rain = item['rain']?['3h'] ?? 0.0;
         totalRainfall += rain;
         maxRainfall = rain > maxRainfall ? rain : maxRainfall;
         if (rain > 0) rainyHours++;
       }
 
-      // AI Prediction Algorithm
-      final prediction = _calculateAIPrediction(
+      // Basic AI Prediction Algorithm
+      final basicPrediction = _calculateAIPrediction(
         temperature: temperature,
         humidity: humidity,
         pressure: pressure,
@@ -361,9 +366,48 @@ class WeatherService {
         cityName: city['name'],
       );
 
-      return prediction;
+      // Enhanced AI Analysis using OpenRouter and Gemini
+      final weatherDataForAI = {
+        'temperature': temperature,
+        'humidity': humidity,
+        'pressure': pressure,
+        'windSpeed': windSpeed,
+        'visibility': visibility,
+        'totalRainfall': totalRainfall,
+        'maxRainfall': maxRainfall,
+        'rainyHours': rainyHours,
+      };
+
+      final enhancedAI = await AIService.getCombinedAIAnalysis(
+        weatherData: weatherDataForAI,
+        cityName: city['name'],
+        riskScore: basicPrediction['riskScore'].toDouble(),
+        riskLevel: basicPrediction['riskLevel'],
+      );
+
+      // Combine basic prediction with enhanced AI analysis
+      final combinedPrediction = {
+        ...basicPrediction,
+        'enhancedAI': enhancedAI,
+        'aiModels': ['Grok-4 (OpenRouter)', 'Gemini Pro'],
+        'aiConfidence': enhancedAI['aiConfidence'],
+        'grokAnalysis': enhancedAI['grokAnalysis'],
+        'geminiAnalysis': enhancedAI['geminiAnalysis'],
+        'combinedInsights': enhancedAI['combinedInsights'],
+      };
+
+      // Save to Firebase
+      try {
+        if (FirebaseService.isInitialized) {
+          await FirebaseService.saveFloodData(city['name'], combinedPrediction);
+        }
+      } catch (e) {
+        print('Error saving enhanced flood data to Firebase (non-critical): $e');
+      }
+
+      return combinedPrediction;
     } catch (e) {
-      print('Error in AI prediction: $e');
+      print('Error in enhanced AI prediction: $e');
       return _getFallbackPrediction();
     }
   }
@@ -462,10 +506,14 @@ class WeatherService {
 
     // Calculate confidence percentage
     int confidencePercent = 85;
-    if (confidence == 'Very High') confidencePercent = 95;
-    else if (confidence == 'High') confidencePercent = 85;
-    else if (confidence == 'Medium') confidencePercent = 70;
-    else confidencePercent = 60;
+    if (confidence == 'Very High')
+      confidencePercent = 95;
+    else if (confidence == 'High')
+      confidencePercent = 85;
+    else if (confidence == 'Medium')
+      confidencePercent = 70;
+    else
+      confidencePercent = 60;
 
     // Generate AI insights
     List<String> insights = [];
