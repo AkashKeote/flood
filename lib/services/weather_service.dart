@@ -193,13 +193,17 @@ class WeatherService {
           'humidity': floodData.humidity,
           'rainfall': floodData.rainfall,
           'timestamp': floodData.timestamp.toIso8601String(),
-          'alerts': floodData.alerts.map((alert) => {
-            'id': alert.id,
-            'message': alert.message,
-            'severity': alert.severity,
-            'timestamp': alert.timestamp.toIso8601String(),
-            'location': alert.location,
-          }).toList(),
+          'alerts': floodData.alerts
+              .map(
+                (alert) => {
+                  'id': alert.id,
+                  'message': alert.message,
+                  'severity': alert.severity,
+                  'timestamp': alert.timestamp.toIso8601String(),
+                  'location': alert.location,
+                },
+              )
+              .toList(),
         });
       } catch (e) {
         print('Error saving flood data to Firebase: $e');

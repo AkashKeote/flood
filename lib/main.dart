@@ -396,97 +396,57 @@ class _DashboardMaterialState extends State<DashboardMaterial> {
     });
   }
 
-  void _showQuickActions() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.red,
-              ),
-              title: const Text('View Flood Alerts'),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(Icons.analytics, color: Colors.teal),
-              title: const Text('Predict Flood Risk'),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.phone_in_talk_rounded,
-                color: Colors.blue,
-              ),
-              title: const Text('Emergency Contacts'),
-              onTap: () {},
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Color(0xFFF7F6F2),
       body: _screens[_selectedIndex],
-      // Simple floating action button without animations
-      floatingActionButton: null,
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.12),
-              blurRadius: 25,
-              offset: Offset(0, -6),
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: Offset(0, -2),
             ),
           ],
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _DashboardNavItem(
+                _buildNavItem(
                   icon: Icons.home_rounded,
-                  label: 'Dashboard',
+                  label: 'Home',
                   isSelected: _selectedIndex == 0,
                   onTap: () => _onItemTapped(0),
                 ),
-                _DashboardNavItem(
-                  icon: Icons.bar_chart_rounded,
-                  label: 'Prediction',
+                _buildNavItem(
+                  icon: Icons.analytics_rounded,
+                  label: 'Predict',
                   isSelected: _selectedIndex == 1,
                   onTap: () => _onItemTapped(1),
                 ),
-                _DashboardNavItem(
+                _buildNavItem(
                   icon: Icons.map_rounded,
                   label: 'Map',
                   isSelected: _selectedIndex == 2,
                   onTap: () => _onItemTapped(2),
                 ),
-                _DashboardNavItem(
-                  icon: Icons.phone_in_talk_rounded,
+                _buildNavItem(
+                  icon: Icons.phone_rounded,
                   label: 'Emergency',
                   isSelected: _selectedIndex == 3,
                   onTap: () => _onItemTapped(3),
                 ),
-                _DashboardNavItem(
+                _buildNavItem(
                   icon: Icons.person_rounded,
                   label: 'Profile',
                   isSelected: _selectedIndex == 4,
@@ -499,77 +459,36 @@ class _DashboardMaterialState extends State<DashboardMaterial> {
       ),
     );
   }
-}
 
-class _DashboardNavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _DashboardNavItem({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildNavItem({
+    required IconData icon,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected
-              ? Color(0xFFB5C7F7).withOpacity(0.15)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Color(0xFFB5C7F7).withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: Offset(0, 2),
-                  ),
-                ]
-              : null,
+          color: isSelected ? Color(0xFFB5C7F7).withOpacity(0.2) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: isSelected ? Color(0xFFB5C7F7) : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: isSelected
-                    ? [
-                        BoxShadow(
-                          color: Color(0xFFB5C7F7).withOpacity(0.4),
-                          blurRadius: 6,
-                          offset: Offset(0, 2),
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Icon(
-                icon,
-                size: 22,
-                color: isSelected
-                    ? Color(0xFF22223B)
-                    : Color(0xFF22223B).withOpacity(0.6),
-              ),
+            Icon(
+              icon,
+              size: 24,
+              color: isSelected ? Color(0xFF22223B) : Color(0xFF22223B).withOpacity(0.6),
             ),
             SizedBox(height: 4),
             Text(
               label,
               style: GoogleFonts.poppins(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected
-                    ? Color(0xFF22223B)
-                    : Color(0xFF22223B).withOpacity(0.7),
+                color: isSelected ? Color(0xFF22223B) : Color(0xFF22223B).withOpacity(0.6),
               ),
             ),
           ],

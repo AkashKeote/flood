@@ -14,7 +14,6 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   late FloodData _currentData;
-  late List<FloodData> _allCitiesData;
   bool _isLoading = true;
   String _selectedCity = 'Andheri';
   List<String> _availableCities = [];
@@ -35,29 +34,17 @@ class _DashboardPageState extends State<DashboardPage> {
     });
 
     try {
-      // Load data for selected city
       final cityData = await WeatherService.getRealTimeData(_selectedCity);
-
-      // Load data for all cities (for overview)
-      final allCitiesData = await WeatherService.getAllMumbaiCitiesData();
-
       setState(() {
         _currentData = cityData;
-        _allCitiesData = allCitiesData;
         _isLoading = false;
       });
     } catch (e) {
-      // Fallback to mock data
       setState(() {
         _currentData = FloodDataService.getMockData();
-        _allCitiesData = FloodDataService.getHistoricalData();
         _isLoading = false;
       });
     }
-  }
-
-  void _refreshData() {
-    _loadData();
   }
 
   void _changeCity(String city) async {
@@ -66,7 +53,6 @@ class _DashboardPageState extends State<DashboardPage> {
     });
     await UserService.updateSelectedCity(city);
     
-    // Log analytics event
     await FirebaseService.logEvent('city_changed', {
       'previous_city': _selectedCity,
       'new_city': city,
@@ -82,262 +68,258 @@ class _DashboardPageState extends State<DashboardPage> {
       return _buildLoadingState();
     }
 
-    return RefreshIndicator(
-      onRefresh: () async => _refreshData(),
-      child: SingleChildScrollView(
-        physics: AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header with city selector
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                vertical: 32.0,
-                horizontal: 24.0,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hello, ${UserService.getUserName().isNotEmpty ? UserService.getUserName() : 'User'}!\nStay safe this monsoon.',
-                          style: GoogleFonts.poppins(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF22223B),
-                          ),
-                        ),
-                        SizedBox(height: 12),
-                        _buildCitySelector(),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _refreshData,
-                    icon: Icon(Icons.refresh_rounded),
-                    color: Color(0xFF22223B),
-                  ),
-                ],
-              ),
-            ),
-
-            // Mumbai Cities Overview
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0),
-              child: Text(
-                'Mumbai Cities Overview',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF22223B),
-                ),
-              ),
-            ),
-            SizedBox(height: 14),
-            _buildCitiesOverview(),
-            SizedBox(height: 28),
-
-            // Quick Stats Cards
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  _PastelStatCard(
-                    title: 'Current Risk',
-                    value: _currentData.riskLevel,
-                    color: _getRiskColor(_currentData.riskLevel),
-                    icon: _getRiskIcon(_currentData.riskLevel),
-                  ),
-                  SizedBox(width: 16),
-                  _PastelStatCard(
-                    title: 'Water Level',
-                    value: '${_currentData.waterLevel.toStringAsFixed(1)}m',
-                    color: Color(0xFFD6EAF8),
-                    icon: Icons.water_drop_rounded,
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 24),
-            // Additional Stats
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  _PastelStatCard(
-                    title: 'Temperature',
-                    value: '${_currentData.temperature.toStringAsFixed(1)}°C',
-                    color: Color(0xFFFFE5B4),
-                    icon: Icons.thermostat_rounded,
-                  ),
-                  SizedBox(width: 16),
-                  _PastelStatCard(
-                    title: 'Rainfall',
-                    value: '${_currentData.rainfall.toStringAsFixed(1)}mm',
-                    color: Color(0xFFE8F4FD),
-                    icon: Icons.cloud_rounded,
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 24),
-            // Chips
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0),
-              child: Wrap(
-                spacing: 10,
-                children: [
-                  _PastelChip(
-                    label: _currentData.area.split(',')[0],
-                    color: Color(0xFFF9E79F),
-                  ),
-                  _PastelChip(
-                    label: _currentData.alerts.isNotEmpty ? 'Alert' : 'Safe',
-                    color: _currentData.alerts.isNotEmpty
-                        ? Color(0xFFFF6B6B)
-                        : Color(0xFFB5C7F7),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 28),
-            // Section Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0),
-              child: Text(
-                'Flood Status',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF22223B),
-                ),
-              ),
-            ),
-            SizedBox(height: 14),
-            // Flood Status Card
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.08),
-                      blurRadius: 16,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
-                ),
+    return Scaffold(
+      backgroundColor: Color(0xFFF7F6F2),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Section
+              Container(
+                padding: EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Area: ${_currentData.area}',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Hello, ${UserService.getUserName().isNotEmpty ? UserService.getUserName() : 'User'}!',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF22223B),
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Stay safe this monsoon',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  color: Color(0xFF22223B).withOpacity(0.7),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _loadData,
+                          icon: Icon(Icons.refresh_rounded),
+                          color: Color(0xFF22223B),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Risk: ${_currentData.riskLevel}',
-                      style: TextStyle(
-                        color: _getRiskColor(_currentData.riskLevel),
+                    SizedBox(height: 20),
+                    _buildCitySelector(),
+                  ],
+                ),
+              ),
+
+              // Stats Cards
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        'Risk Level',
+                        _currentData.riskLevel,
+                        _getRiskColor(_currentData.riskLevel),
+                        _getRiskIcon(_currentData.riskLevel),
                       ),
                     ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Water Level: ${_currentData.waterLevel.toStringAsFixed(1)}m',
-                      style: TextStyle(color: Color(0xFF22223B)),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Humidity: ${_currentData.humidity.toStringAsFixed(1)}%',
-                      style: TextStyle(color: Color(0xFF22223B)),
-                    ),
-                    SizedBox(height: 16),
-                    LinearProgressIndicator(
-                      value: _getRiskProgress(_currentData.riskLevel),
-                      backgroundColor: Color(0xFFF7F6F2),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        _getRiskColor(_currentData.riskLevel),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Water Level',
+                        '${_currentData.waterLevel.toStringAsFixed(1)}m',
+                        Color(0xFFD6EAF8),
+                        Icons.water_drop_rounded,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-            SizedBox(height: 28),
-            // Alerts Section
-            if (_currentData.alerts.isNotEmpty) ...[
+
+              SizedBox(height: 16),
+
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18.0),
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        'Temperature',
+                        '${_currentData.temperature.toStringAsFixed(1)}°C',
+                        Color(0xFFFFE5B4),
+                        Icons.thermostat_rounded,
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Humidity',
+                        '${_currentData.humidity.toStringAsFixed(1)}%',
+                        Color(0xFFE8F4FD),
+                        Icons.opacity_rounded,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              SizedBox(height: 32),
+
+              // Flood Status Card
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Flood Status',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF22223B),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Icon(
+                            _getRiskIcon(_currentData.riskLevel),
+                            color: _getRiskColor(_currentData.riskLevel),
+                            size: 24,
+                          ),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _currentData.area,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                Text(
+                                  'Risk: ${_currentData.riskLevel}',
+                                  style: TextStyle(
+                                    color: _getRiskColor(_currentData.riskLevel),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 16),
+                      LinearProgressIndicator(
+                        value: _getRiskProgress(_currentData.riskLevel),
+                        backgroundColor: Color(0xFFF7F6F2),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          _getRiskColor(_currentData.riskLevel),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              SizedBox(height: 24),
+
+              // Alerts Section
+              if (_currentData.alerts.isNotEmpty) ...[
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    'Recent Alerts',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF22223B),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 12),
+                ..._currentData.alerts
+                    .map((alert) => _buildAlertCard(alert))
+                    .toList(),
+                SizedBox(height: 24),
+              ],
+
+              // Quick Actions
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
                 child: Text(
-                  'Recent Alerts',
+                  'Quick Actions',
                   style: GoogleFonts.poppins(
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF22223B),
                   ),
                 ),
               ),
-              SizedBox(height: 14),
-              ..._currentData.alerts
-                  .map((alert) => _buildAlertCard(alert))
-                  .toList(),
-              SizedBox(height: 28),
-            ],
-            // Quick Actions
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0),
-              child: Text(
-                'Quick Actions',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF22223B),
+              SizedBox(height: 12),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionCard(
+                        Icons.report_rounded,
+                        'Report',
+                        Color(0xFFF9E79F),
+                        () => _showReportDialog(),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionCard(
+                        Icons.phone_rounded,
+                        'Emergency',
+                        Color(0xFFD6EAF8),
+                        () => _callEmergency(),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionCard(
+                        Icons.map_rounded,
+                        'Map',
+                        Color(0xFFB5C7F7),
+                        () => _navigateToMap(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            SizedBox(height: 14),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _PastelActionCard(
-                      icon: Icons.report,
-                      label: 'Report Flood',
-                      color: Color(0xFFF9E79F),
-                      onTap: () => _showReportDialog(),
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: _PastelActionCard(
-                      icon: Icons.phone_in_talk_rounded,
-                      label: 'Call Emergency',
-                      color: Color(0xFFD6EAF8),
-                      onTap: () => _callEmergency(),
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: _PastelActionCard(
-                      icon: Icons.map_rounded,
-                      label: 'View Map',
-                      color: Color(0xFFB5C7F7),
-                      onTap: () => _navigateToMap(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: 32),
-          ],
+
+              SizedBox(height: 32),
+            ],
+          ),
         ),
       ),
     );
@@ -345,10 +327,10 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildCitySelector() {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(25),
         border: Border.all(color: Color(0xFFB5C7F7)),
       ),
       child: DropdownButtonHideUnderline(
@@ -358,7 +340,7 @@ class _DashboardPageState extends State<DashboardPage> {
           style: TextStyle(
             color: Color(0xFF22223B),
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
           ),
           onChanged: (String? newValue) {
             if (newValue != null) {
@@ -373,83 +355,41 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildCitiesOverview() {
+  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
     return Container(
-      height: 120,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _allCitiesData.length,
-        itemBuilder: (context, index) {
-          final cityData = _allCitiesData[index];
-          return Container(
-            width: 140,
-            margin: EdgeInsets.only(right: 12),
-            padding: EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.08),
-                  blurRadius: 8,
-                  offset: Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  cityData.area.split(',')[0],
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                ),
-                SizedBox(height: 8),
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: _getRiskColor(cityData.riskLevel),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    SizedBox(width: 6),
-                    Text(
-                      cityData.riskLevel,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _getRiskColor(cityData.riskLevel),
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 4),
-                Text(
-                  '${cityData.waterLevel.toStringAsFixed(1)}m',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF22223B)),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFB5C7F7)),
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 10,
+            offset: Offset(0, 5),
           ),
-          SizedBox(height: 16),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Color(0xFF22223B), size: 28),
+          SizedBox(height: 12),
           Text(
-            'Loading flood data...',
-            style: GoogleFonts.poppins(fontSize: 16, color: Color(0xFF22223B)),
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF22223B),
+              fontSize: 14,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF22223B),
+            ),
           ),
         ],
       ),
@@ -458,19 +398,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Widget _buildAlertCard(FloodAlert alert) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       child: Container(
         padding: EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: _getAlertColor(alert.severity),
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.08),
-              blurRadius: 8,
-              offset: Offset(0, 4),
-            ),
-          ],
         ),
         child: Row(
           children: [
@@ -497,6 +430,55 @@ class _DashboardPageState extends State<DashboardPage> {
                   ),
                 ],
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionCard(IconData icon, String label, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Color(0xFF22223B), size: 24),
+            SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF22223B),
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Scaffold(
+      backgroundColor: Color(0xFFF7F6F2),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFB5C7F7)),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Loading flood data...',
+              style: GoogleFonts.poppins(fontSize: 16, color: Color(0xFF22223B)),
             ),
           ],
         ),
@@ -625,121 +607,8 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _navigateToMap() {
-    // This will be handled by the main navigation
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Navigating to Map...')));
-  }
-}
-
-class _PastelStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final Color color;
-  final IconData icon;
-  const _PastelStatCard({
-    required this.title,
-    required this.value,
-    required this.color,
-    required this.icon,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.08),
-              blurRadius: 16,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: Color(0xFF22223B), size: 32),
-            SizedBox(height: 12),
-            Text(
-              title,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF22223B),
-              ),
-            ),
-            SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(fontSize: 18, color: Color(0xFF22223B)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PastelChip extends StatelessWidget {
-  final String label;
-  final Color color;
-  const _PastelChip({required this.label, required this.color});
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      label: Text(label, style: TextStyle(color: Color(0xFF22223B))),
-      backgroundColor: color,
-      shape: StadiumBorder(),
-    );
-  }
-}
-
-class _PastelActionCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-  const _PastelActionCard({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 18),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.08),
-              blurRadius: 16,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Color(0xFF22223B), size: 28),
-            SizedBox(height: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF22223B),
-              ),
-            ),
-          ],
-        ),
-      ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Navigating to Map...')),
     );
   }
 }
