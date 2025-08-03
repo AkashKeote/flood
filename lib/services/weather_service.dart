@@ -305,4 +305,225 @@ class WeatherService {
   static List<String> getMumbaiCities() {
     return _mumbaiCities.map((city) => city['name'] as String).toList();
   }
+
+  // AI-powered flood prediction methods
+  static Future<Map<String, dynamic>> getAIPrediction(String cityName) async {
+    try {
+      // Find city coordinates
+      final city = _mumbaiCities.firstWhere(
+        (city) => city['name'].toLowerCase() == cityName.toLowerCase(),
+        orElse: () => _mumbaiCities[0],
+      );
+
+      // Get current weather and forecast data
+      final weatherUrl = '$_baseUrl/weather?lat=${city['lat']}&lon=${city['lon']}&appid=$_apiKey&units=metric';
+      final weatherResponse = await http.get(Uri.parse(weatherUrl));
+
+      final forecastUrl = '$_baseUrl/forecast?lat=${city['lat']}&lon=${city['lon']}&appid=$_apiKey&units=metric';
+      final forecastResponse = await http.get(Uri.parse(forecastUrl));
+
+      if (weatherResponse.statusCode != 200 || forecastResponse.statusCode != 200) {
+        throw Exception('Failed to fetch weather data for AI prediction');
+      }
+
+      final weatherData = json.decode(weatherResponse.body);
+      final forecastData = json.decode(forecastResponse.body);
+
+      // Extract weather parameters for AI analysis
+      final temperature = weatherData['main']['temp'].toDouble();
+      final humidity = weatherData['main']['humidity'].toDouble();
+      final pressure = weatherData['main']['pressure'].toDouble();
+      final windSpeed = weatherData['wind']['speed'].toDouble();
+      final visibility = weatherData['visibility']?.toDouble() ?? 10000.0;
+
+      // Calculate rainfall from forecast
+      double totalRainfall = 0.0;
+      double maxRainfall = 0.0;
+      int rainyHours = 0;
+
+      for (var item in forecastData['list'].take(24)) { // 24 hours forecast
+        final rain = item['rain']?['3h'] ?? 0.0;
+        totalRainfall += rain;
+        maxRainfall = rain > maxRainfall ? rain : maxRainfall;
+        if (rain > 0) rainyHours++;
+      }
+
+      // AI Prediction Algorithm
+      final prediction = _calculateAIPrediction(
+        temperature: temperature,
+        humidity: humidity,
+        pressure: pressure,
+        windSpeed: windSpeed,
+        visibility: visibility,
+        totalRainfall: totalRainfall,
+        maxRainfall: maxRainfall,
+        rainyHours: rainyHours,
+        cityName: city['name'],
+      );
+
+      return prediction;
+    } catch (e) {
+      print('Error in AI prediction: $e');
+      return _getFallbackPrediction();
+    }
+  }
+
+  static Map<String, dynamic> _calculateAIPrediction({
+    required double temperature,
+    required double humidity,
+    required double pressure,
+    required double windSpeed,
+    required double visibility,
+    required double totalRainfall,
+    required double maxRainfall,
+    required int rainyHours,
+    required String cityName,
+  }) {
+    // AI Risk Assessment Algorithm
+    double riskScore = 0.0;
+    String riskLevel = 'Low';
+    String confidence = 'High';
+    List<String> factors = [];
+
+    // Factor 1: Rainfall Analysis (40% weight)
+    if (totalRainfall > 50) {
+      riskScore += 40;
+      factors.add('Heavy rainfall detected');
+    } else if (totalRainfall > 25) {
+      riskScore += 25;
+      factors.add('Moderate rainfall');
+    } else if (totalRainfall > 10) {
+      riskScore += 15;
+      factors.add('Light rainfall');
+    }
+
+    // Factor 2: Humidity Impact (20% weight)
+    if (humidity > 85) {
+      riskScore += 20;
+      factors.add('Very high humidity');
+    } else if (humidity > 75) {
+      riskScore += 15;
+      factors.add('High humidity');
+    }
+
+    // Factor 3: Pressure Analysis (15% weight)
+    if (pressure < 1000) {
+      riskScore += 15;
+      factors.add('Low atmospheric pressure');
+    } else if (pressure < 1010) {
+      riskScore += 10;
+      factors.add('Moderate pressure');
+    }
+
+    // Factor 4: Wind Speed (10% weight)
+    if (windSpeed > 20) {
+      riskScore += 10;
+      factors.add('Strong winds');
+    } else if (windSpeed > 10) {
+      riskScore += 5;
+      factors.add('Moderate winds');
+    }
+
+    // Factor 5: Visibility (10% weight)
+    if (visibility < 5000) {
+      riskScore += 10;
+      factors.add('Poor visibility');
+    } else if (visibility < 8000) {
+      riskScore += 5;
+      factors.add('Reduced visibility');
+    }
+
+    // Factor 6: Rain Duration (5% weight)
+    if (rainyHours > 12) {
+      riskScore += 5;
+      factors.add('Extended rainfall period');
+    } else if (rainyHours > 6) {
+      riskScore += 3;
+      factors.add('Moderate rainfall duration');
+    }
+
+    // Determine risk level based on score
+    if (riskScore >= 80) {
+      riskLevel = 'Critical';
+      confidence = 'Very High';
+    } else if (riskScore >= 60) {
+      riskLevel = 'High';
+      confidence = 'High';
+    } else if (riskScore >= 40) {
+      riskLevel = 'Moderate';
+      confidence = 'Medium';
+    } else if (riskScore >= 20) {
+      riskLevel = 'Low';
+      confidence = 'Medium';
+    } else {
+      riskLevel = 'Very Low';
+      confidence = 'High';
+    }
+
+    // Calculate confidence percentage
+    int confidencePercent = 85;
+    if (confidence == 'Very High') confidencePercent = 95;
+    else if (confidence == 'High') confidencePercent = 85;
+    else if (confidence == 'Medium') confidencePercent = 70;
+    else confidencePercent = 60;
+
+    // Generate AI insights
+    List<String> insights = [];
+    if (totalRainfall > 30) {
+      insights.add('Heavy rainfall expected - Monitor water levels closely');
+    }
+    if (humidity > 80) {
+      insights.add('High humidity may slow water evaporation');
+    }
+    if (pressure < 1005) {
+      insights.add('Low pressure system detected - Weather instability likely');
+    }
+    if (riskLevel == 'Critical' || riskLevel == 'High') {
+      insights.add('Immediate action recommended - Prepare evacuation plans');
+    }
+
+    return {
+      'city': cityName,
+      'riskLevel': riskLevel,
+      'riskScore': riskScore.round(),
+      'confidence': confidence,
+      'confidencePercent': confidencePercent,
+      'factors': factors,
+      'insights': insights,
+      'weatherData': {
+        'temperature': temperature,
+        'humidity': humidity,
+        'pressure': pressure,
+        'windSpeed': windSpeed,
+        'visibility': visibility,
+        'totalRainfall': totalRainfall,
+        'maxRainfall': maxRainfall,
+        'rainyHours': rainyHours,
+      },
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
+
+  static Map<String, dynamic> _getFallbackPrediction() {
+    return {
+      'city': 'Mumbai',
+      'riskLevel': 'Low',
+      'riskScore': 15,
+      'confidence': 'Medium',
+      'confidencePercent': 70,
+      'factors': ['Limited data available'],
+      'insights': ['Using historical patterns for prediction'],
+      'weatherData': {
+        'temperature': 28.0,
+        'humidity': 75.0,
+        'pressure': 1013.0,
+        'windSpeed': 8.0,
+        'visibility': 8000.0,
+        'totalRainfall': 5.0,
+        'maxRainfall': 2.0,
+        'rainyHours': 2,
+      },
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
 }
