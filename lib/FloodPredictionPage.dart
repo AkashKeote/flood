@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'services/weather_service.dart';
 import 'services/user_service.dart';
+import 'services/twitter_service.dart';
 
 class FloodPredictionPage extends StatefulWidget {
   const FloodPredictionPage({super.key});
@@ -13,6 +14,7 @@ class FloodPredictionPage extends StatefulWidget {
 class _FloodPredictionPageState extends State<FloodPredictionPage> {
   Map<String, dynamic>? _predictionData;
   bool _isLoading = false;
+  bool _isSharing = false;
   String _selectedCity = '';
   List<String> _availableCities = [];
 
@@ -48,6 +50,109 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Prediction failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _shareOnTwitter() async {
+    if (_predictionData == null) return;
+
+    setState(() {
+      _isSharing = true;
+    });
+
+    try {
+      final result = await TwitterService.shareAIPrediction(
+        cityName: _selectedCity,
+        riskLevel: _predictionData!['riskLevel'],
+        aiConfidence: _predictionData!['aiConfidence'] ?? 85,
+        grokAnalysis: _predictionData!['grokAnalysis'] ?? {},
+        geminiAnalysis: _predictionData!['geminiAnalysis'] ?? {},
+      );
+
+      setState(() {
+        _isSharing = false;
+      });
+
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ ${result['message']}'),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'View Tweet',
+              onPressed: () {
+                // Open tweet URL
+                // You can add URL launcher here
+              },
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ ${result['message']}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isSharing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sharing: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _shareFloodAlert() async {
+    if (_predictionData == null) return;
+
+    setState(() {
+      _isSharing = true;
+    });
+
+    try {
+      final result = await TwitterService.shareFloodAlert(
+        cityName: _selectedCity,
+        riskLevel: _predictionData!['riskLevel'],
+        riskScore: _predictionData!['riskScore'].toString(),
+        weatherData: _predictionData!['weatherData'],
+        insights: _predictionData!['factors'] ?? [],
+      );
+
+      setState(() {
+        _isSharing = false;
+      });
+
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Flood alert shared on Twitter!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Failed to share flood alert'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isSharing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sharing alert: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -250,6 +355,34 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                           '${_predictionData!['weatherData']['humidity'].toStringAsFixed(0)}%',
                           Color(0xFFE8F4FD),
                           Icons.opacity_rounded,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                SizedBox(height: 24),
+
+                // Twitter Share Buttons
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildShareButton(
+                          'Share AI Prediction',
+                          Icons.psychology_rounded,
+                          Color(0xFF1DA1F2),
+                          _shareOnTwitter,
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: _buildShareButton(
+                          'Share Flood Alert',
+                          Icons.warning_rounded,
+                          Color(0xFFFF5722),
+                          _shareFloodAlert,
                         ),
                       ),
                     ],
@@ -559,6 +692,127 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
     );
   }
 
+  Widget _buildShareButton(
+    String label,
+    IconData icon,
+    Color color,
+    VoidCallback onPressed,
+  ) {
+    return SizedBox(
+      height: 45,
+      child: ElevatedButton(
+        onPressed: _isSharing ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 2,
+        ),
+        child: _isSharing
+            ? SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 18),
+                  SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildCitySelector() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Color(0xFFB5C7F7)),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _selectedCity,
+          icon: Icon(Icons.arrow_drop_down, color: Color(0xFF22223B)),
+          style: TextStyle(
+            color: Color(0xFF22223B),
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+          onChanged: (String? newValue) {
+            if (newValue != null) {
+              _changeCity(newValue);
+            }
+          },
+          items: _availableCities.map<DropdownMenuItem<String>>((String city) {
+            return DropdownMenuItem<String>(value: city, child: Text(city));
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatCard(
+    String title,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            blurRadius: 8,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Color(0xFF22223B), size: 24),
+          SizedBox(height: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF22223B),
+              fontSize: 12,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF22223B),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAIAnalysisSection(
     String title,
     Map<String, dynamic> analysis,
@@ -687,82 +941,6 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildCitySelector() {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: Color(0xFFB5C7F7)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: _selectedCity,
-          icon: Icon(Icons.arrow_drop_down, color: Color(0xFF22223B)),
-          style: TextStyle(
-            color: Color(0xFF22223B),
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
-          onChanged: (String? newValue) {
-            if (newValue != null) {
-              _changeCity(newValue);
-            }
-          },
-          items: _availableCities.map<DropdownMenuItem<String>>((String city) {
-            return DropdownMenuItem<String>(value: city, child: Text(city));
-          }).toList(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(
-    String title,
-    String value,
-    Color color,
-    IconData icon,
-  ) {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: Color(0xFF22223B), size: 24),
-          SizedBox(height: 8),
-          Text(
-            title,
-            style: TextStyle(
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF22223B),
-              fontSize: 12,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF22223B),
-            ),
-          ),
-        ],
-      ),
     );
   }
 

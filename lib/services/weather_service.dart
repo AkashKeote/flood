@@ -402,7 +402,9 @@ class WeatherService {
           await FirebaseService.saveFloodData(city['name'], combinedPrediction);
         }
       } catch (e) {
-        print('Error saving enhanced flood data to Firebase (non-critical): $e');
+        print(
+          'Error saving enhanced flood data to Firebase (non-critical): $e',
+        );
       }
 
       return combinedPrediction;

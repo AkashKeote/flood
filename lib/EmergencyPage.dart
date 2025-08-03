@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:io';
 import 'services/firebase_service.dart';
 import 'services/user_service.dart';
+import 'services/twitter_service.dart';
 
 class EmergencyPage extends StatefulWidget {
   const EmergencyPage({super.key});
@@ -13,6 +14,7 @@ class EmergencyPage extends StatefulWidget {
 
 class _EmergencyPageState extends State<EmergencyPage> {
   bool _isSOSActive = false;
+  bool _isSharing = false;
   final List<EmergencyContact> _emergencyContacts = [
     EmergencyContact(
       name: 'Police Control',
@@ -274,6 +276,50 @@ class _EmergencyPageState extends State<EmergencyPage> {
         SnackBar(
           content: Text('SOS deactivated'),
           backgroundColor: Color(0xFF4CAF50),
+        ),
+      );
+    }
+  }
+
+  Future<void> _shareEmergencyOnTwitter() async {
+    setState(() {
+      _isSharing = true;
+    });
+
+    try {
+      final result = await TwitterService.shareEmergencyAlert(
+        cityName: UserService.getSelectedCity(),
+        emergencyType: 'Flood Emergency',
+        message: 'Emergency flood situation detected. Please stay safe and follow local authorities.',
+      );
+
+      setState(() {
+        _isSharing = false;
+      });
+
+      if (result['success']) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Emergency alert shared on Twitter!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Failed to share emergency alert'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isSharing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sharing emergency: $e'),
+          backgroundColor: Colors.red,
         ),
       );
     }
