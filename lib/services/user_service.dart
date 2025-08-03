@@ -58,13 +58,7 @@ class UserService {
   // Login user
   static Future<bool> login(String name, String city) async {
     try {
-      // Sign in anonymously to Firebase
-      final userCredential = await FirebaseService.signInAnonymously();
-      if (userCredential == null) {
-        print('Failed to sign in to Firebase');
-        return false;
-      }
-
+      // Create user data
       _currentUser = UserData(
         name: name,
         selectedCity: city,
@@ -75,17 +69,26 @@ class UserService {
       // Save to local storage
       await _saveUserData();
       
-      // Save to Firebase
-      await FirebaseService.saveUserData(
-        userCredential.user!.uid,
-        _currentUser!.toJson(),
-      );
-      
-      // Log analytics event
-      await FirebaseService.logEvent('user_login', {
-        'user_name': name,
-        'selected_city': city,
-      });
+      // Try to save to Firebase (but don't fail if it doesn't work)
+      try {
+        if (FirebaseService.isInitialized) {
+          final userCredential = await FirebaseService.signInAnonymously();
+          if (userCredential != null) {
+            await FirebaseService.saveUserData(
+              userCredential.user!.uid,
+              _currentUser!.toJson(),
+            );
+            
+            await FirebaseService.logEvent('user_login', {
+              'user_name': name,
+              'selected_city': city,
+            });
+          }
+        }
+      } catch (firebaseError) {
+        print('Firebase error (non-critical): $firebaseError');
+        // Continue with local login even if Firebase fails
+      }
       
       return true;
     } catch (e) {
@@ -97,14 +100,19 @@ class UserService {
   // Logout user
   static Future<void> logout() async {
     try {
-      // Log analytics event
-      await FirebaseService.logEvent('user_logout', {
-        'user_name': _currentUser?.name ?? '',
-        'selected_city': _currentUser?.selectedCity ?? '',
-      });
-      
-      // Sign out from Firebase
-      await FirebaseService.signOut();
+      // Try to log analytics event (but don't fail if it doesn't work)
+      try {
+        if (FirebaseService.isInitialized) {
+          await FirebaseService.logEvent('user_logout', {
+            'user_name': _currentUser?.name ?? '',
+            'selected_city': _currentUser?.selectedCity ?? '',
+          });
+          
+          await FirebaseService.signOut();
+        }
+      } catch (firebaseError) {
+        print('Firebase error during logout (non-critical): $firebaseError');
+      }
       
       _currentUser = UserData.empty();
       await _saveUserData();

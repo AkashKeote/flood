@@ -185,28 +185,30 @@ class WeatherService {
 
       // Save to Firebase
       try {
-        await FirebaseService.saveFloodData(city['name'], {
-          'area': floodData.area,
-          'waterLevel': floodData.waterLevel,
-          'riskLevel': floodData.riskLevel,
-          'temperature': floodData.temperature,
-          'humidity': floodData.humidity,
-          'rainfall': floodData.rainfall,
-          'timestamp': floodData.timestamp.toIso8601String(),
-          'alerts': floodData.alerts
-              .map(
-                (alert) => {
-                  'id': alert.id,
-                  'message': alert.message,
-                  'severity': alert.severity,
-                  'timestamp': alert.timestamp.toIso8601String(),
-                  'location': alert.location,
-                },
-              )
-              .toList(),
-        });
+        if (FirebaseService.isInitialized) {
+          await FirebaseService.saveFloodData(city['name'], {
+            'area': floodData.area,
+            'waterLevel': floodData.waterLevel,
+            'riskLevel': floodData.riskLevel,
+            'temperature': floodData.temperature,
+            'humidity': floodData.humidity,
+            'rainfall': floodData.rainfall,
+            'timestamp': floodData.timestamp.toIso8601String(),
+            'alerts': floodData.alerts
+                .map(
+                  (alert) => {
+                    'id': alert.id,
+                    'message': alert.message,
+                    'severity': alert.severity,
+                    'timestamp': alert.timestamp.toIso8601String(),
+                    'location': alert.location,
+                  },
+                )
+                .toList(),
+          });
+        }
       } catch (e) {
-        print('Error saving flood data to Firebase: $e');
+        print('Error saving flood data to Firebase (non-critical): $e');
       }
 
       return floodData;

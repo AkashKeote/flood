@@ -39,9 +39,9 @@ class FloodManagementApp extends StatelessWidget {
         ),
         textTheme: GoogleFonts.poppinsTextTheme(
           Theme.of(context).textTheme.apply(
-                bodyColor: Color(0xFF22223B),
-                displayColor: Color(0xFF22223B),
-              ),
+            bodyColor: Color(0xFF22223B),
+            displayColor: Color(0xFF22223B),
+          ),
         ),
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.transparent,
@@ -75,12 +75,15 @@ class AuthWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<bool>(
-      future: Future.delayed(const Duration(seconds: 2), () => UserService.isLoggedIn),
+      future: Future.delayed(
+        const Duration(seconds: 2),
+        () => UserService.isLoggedIn,
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
-        
+
         final isLoggedIn = snapshot.data ?? false;
         if (isLoggedIn) {
           return const DashboardMaterial();
@@ -209,21 +212,13 @@ class _LoadingScreenState extends State<LoadingScreen>
       vsync: this,
     );
 
-    _pulseAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.2,
-    ).animate(CurvedAnimation(
-      parent: _pulseController,
-      curve: Curves.easeInOut,
-    ));
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
 
-    _progressAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _progressController,
-      curve: Curves.easeInOut,
-    ));
+    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _progressController, curve: Curves.easeInOut),
+    );
 
     // Start animations
     _pulseController.repeat(reverse: true);
@@ -240,9 +235,7 @@ class _LoadingScreenState extends State<LoadingScreen>
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => const DashboardMaterial(),
-          ),
+          MaterialPageRoute(builder: (context) => const DashboardMaterial()),
         );
       }
     });
@@ -264,10 +257,7 @@ class _LoadingScreenState extends State<LoadingScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF7F6F2),
-              Color(0xFFB5C7F7).withOpacity(0.1),
-            ],
+            colors: [Color(0xFFF7F6F2), Color(0xFFB5C7F7).withOpacity(0.1)],
           ),
         ),
         child: Center(
@@ -471,7 +461,9 @@ class _DashboardMaterialState extends State<DashboardMaterial> {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? Color(0xFFB5C7F7).withOpacity(0.2) : Colors.transparent,
+          color: isSelected
+              ? Color(0xFFB5C7F7).withOpacity(0.2)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -480,7 +472,9 @@ class _DashboardMaterialState extends State<DashboardMaterial> {
             Icon(
               icon,
               size: 24,
-              color: isSelected ? Color(0xFF22223B) : Color(0xFF22223B).withOpacity(0.6),
+              color: isSelected
+                  ? Color(0xFF22223B)
+                  : Color(0xFF22223B).withOpacity(0.6),
             ),
             SizedBox(height: 4),
             Text(
@@ -488,7 +482,9 @@ class _DashboardMaterialState extends State<DashboardMaterial> {
               style: GoogleFonts.poppins(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? Color(0xFF22223B) : Color(0xFF22223B).withOpacity(0.6),
+                color: isSelected
+                    ? Color(0xFF22223B)
+                    : Color(0xFF22223B).withOpacity(0.6),
               ),
             ),
           ],

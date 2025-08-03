@@ -63,10 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -122,9 +119,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: Colors.white,
                     ),
                   ),
-                  
+
                   SizedBox(height: 32),
-                  
+
                   // Title
                   Text(
                     'Flood Management',
@@ -135,9 +132,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  
+
                   SizedBox(height: 8),
-                  
+
                   Text(
                     'Stay Safe • Stay Informed',
                     style: GoogleFonts.poppins(
@@ -147,9 +144,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  
+
                   SizedBox(height: 48),
-                  
+
                   // Login Form
                   Container(
                     padding: EdgeInsets.all(24),
@@ -176,9 +173,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Color(0xFF22223B),
                             ),
                           ),
-                          
+
                           SizedBox(height: 8),
-                          
+
                           Text(
                             'Please enter your details',
                             style: GoogleFonts.poppins(
@@ -186,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Color(0xFF22223B).withOpacity(0.7),
                             ),
                           ),
-                          
+
                           SizedBox(height: 24),
 
                           // Name Field
@@ -195,18 +192,28 @@ class _LoginScreenState extends State<LoginScreen> {
                             decoration: InputDecoration(
                               labelText: 'Your Name',
                               hintText: 'Enter your full name',
-                              prefixIcon: Icon(Icons.person_rounded, color: Color(0xFFB5C7F7)),
+                              prefixIcon: Icon(
+                                Icons.person_rounded,
+                                color: Color(0xFFB5C7F7),
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                borderSide: BorderSide(
+                                  color: Color(0xFFB5C7F7),
+                                ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Color(0xFFB5C7F7).withOpacity(0.5)),
+                                borderSide: BorderSide(
+                                  color: Color(0xFFB5C7F7).withOpacity(0.5),
+                                ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                borderSide: BorderSide(
+                                  color: Color(0xFFB5C7F7),
+                                  width: 2,
+                                ),
                               ),
                               filled: true,
                               fillColor: Color(0xFFF7F6F2),
@@ -218,27 +225,39 @@ class _LoginScreenState extends State<LoginScreen> {
                               return null;
                             },
                           ),
-                          
+
                           SizedBox(height: 20),
 
                           // City Selection
                           DropdownButtonFormField<String>(
-                            value: _selectedCity.isNotEmpty ? _selectedCity : null,
+                            value: _selectedCity.isNotEmpty
+                                ? _selectedCity
+                                : null,
                             decoration: InputDecoration(
                               labelText: 'Select Your City',
                               hintText: 'Choose your city',
-                              prefixIcon: Icon(Icons.location_city_rounded, color: Color(0xFFB5C7F7)),
+                              prefixIcon: Icon(
+                                Icons.location_city_rounded,
+                                color: Color(0xFFB5C7F7),
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                borderSide: BorderSide(
+                                  color: Color(0xFFB5C7F7),
+                                ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Color(0xFFB5C7F7).withOpacity(0.5)),
+                                borderSide: BorderSide(
+                                  color: Color(0xFFB5C7F7).withOpacity(0.5),
+                                ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                borderSide: BorderSide(
+                                  color: Color(0xFFB5C7F7),
+                                  width: 2,
+                                ),
                               ),
                               filled: true,
                               fillColor: Color(0xFFF7F6F2),
@@ -261,7 +280,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               return null;
                             },
                           ),
-                          
+
                           SizedBox(height: 32),
 
                           // Login Button
@@ -284,9 +303,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                       height: 20,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
-                                          Color(0xFF22223B),
-                                        ),
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                              Color(0xFF22223B),
+                                            ),
                                       ),
                                     )
                                   : Text(
@@ -298,7 +318,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                             ),
                           ),
-                          
+
                           SizedBox(height: 16),
 
                           // Info Text
@@ -328,4 +348,4 @@ class _LoginScreenState extends State<LoginScreen> {
     _nameController.dispose();
     super.dispose();
   }
-} 
+}

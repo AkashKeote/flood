@@ -29,7 +29,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 await UserService.logout();
                 if (mounted) {
                   Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const LoginScreen(),
+                    ),
                     (route) => false,
                   );
                 }
@@ -94,7 +96,9 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       SizedBox(height: 16),
                       Text(
-                        UserService.getUserName().isNotEmpty ? UserService.getUserName() : 'User',
+                        UserService.getUserName().isNotEmpty
+                            ? UserService.getUserName()
+                            : 'User',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -103,7 +107,10 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       SizedBox(height: 8),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Color(0xFFD6EAF8),
                           borderRadius: BorderRadius.circular(16),
@@ -111,10 +118,16 @@ class _ProfilePageState extends State<ProfilePage> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.location_on_rounded, color: Color(0xFF22223B), size: 16),
+                            Icon(
+                              Icons.location_on_rounded,
+                              color: Color(0xFF22223B),
+                              size: 16,
+                            ),
                             SizedBox(width: 6),
                             Text(
-                              UserService.getSelectedCity().isNotEmpty ? UserService.getSelectedCity() : 'Mumbai',
+                              UserService.getSelectedCity().isNotEmpty
+                                  ? UserService.getSelectedCity()
+                                  : 'Mumbai',
                               style: TextStyle(
                                 color: Color(0xFF22223B),
                                 fontSize: 14,
@@ -229,7 +242,13 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildSettingCard(IconData icon, String title, String subtitle, Color color, VoidCallback onTap) {
+  Widget _buildSettingCard(
+    IconData icon,
+    String title,
+    String subtitle,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -264,7 +283,11 @@ class _ProfilePageState extends State<ProfilePage> {
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF22223B), size: 16),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Color(0xFF22223B),
+              size: 16,
+            ),
           ],
         ),
       ),

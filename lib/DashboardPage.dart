@@ -22,8 +22,8 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _availableCities = WeatherService.getMumbaiCities();
-    _selectedCity = UserService.getSelectedCity().isNotEmpty 
-        ? UserService.getSelectedCity() 
+    _selectedCity = UserService.getSelectedCity().isNotEmpty
+        ? UserService.getSelectedCity()
         : 'Andheri';
     _loadData();
   }
@@ -53,11 +53,18 @@ class _DashboardPageState extends State<DashboardPage> {
     });
     await UserService.updateSelectedCity(city);
     
-    await FirebaseService.logEvent('city_changed', {
-      'previous_city': _selectedCity,
-      'new_city': city,
-      'user_name': UserService.getUserName(),
-    });
+    // Try to log analytics event (but don't fail if it doesn't work)
+    try {
+      if (FirebaseService.isInitialized) {
+        await FirebaseService.logEvent('city_changed', {
+          'previous_city': _selectedCity,
+          'new_city': city,
+          'user_name': UserService.getUserName(),
+        });
+      }
+    } catch (firebaseError) {
+      print('Firebase error (non-critical): $firebaseError');
+    }
     
     _loadData();
   }
@@ -226,7 +233,9 @@ class _DashboardPageState extends State<DashboardPage> {
                                 Text(
                                   'Risk: ${_currentData.riskLevel}',
                                   style: TextStyle(
-                                    color: _getRiskColor(_currentData.riskLevel),
+                                    color: _getRiskColor(
+                                      _currentData.riskLevel,
+                                    ),
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -355,7 +364,12 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, Color color, IconData icon) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
     return Container(
       padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -437,7 +451,12 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildActionCard(IconData icon, String label, Color color, VoidCallback onTap) {
+  Widget _buildActionCard(
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -478,7 +497,10 @@ class _DashboardPageState extends State<DashboardPage> {
             SizedBox(height: 16),
             Text(
               'Loading flood data...',
-              style: GoogleFonts.poppins(fontSize: 16, color: Color(0xFF22223B)),
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: Color(0xFF22223B),
+              ),
             ),
           ],
         ),
@@ -607,8 +629,8 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _navigateToMap() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Navigating to Map...')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Navigating to Map...')));
   }
 }
