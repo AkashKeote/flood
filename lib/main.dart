@@ -8,8 +8,12 @@ import 'ProfilePage.dart';
 import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
 import 'SplashScreen.dart';
+import 'LoginScreen.dart';
+import 'services/user_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await UserService.initialize();
   runApp(const FloodManagementApp());
 }
 
@@ -57,8 +61,31 @@ class FloodManagementApp extends StatelessWidget {
           foregroundColor: Color(0xFF22223B),
         ),
       ),
-      home: const ResponsiveWrapper(child: SplashScreen()),
+      home: const ResponsiveWrapper(child: AuthWrapper()),
       debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: Future.delayed(const Duration(seconds: 2), () => UserService.isLoggedIn),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SplashScreen();
+        }
+        
+        final isLoggedIn = snapshot.data ?? false;
+        if (isLoggedIn) {
+          return const DashboardMaterial();
+        } else {
+          return const LoginScreen();
+        }
+      },
     );
   }
 }

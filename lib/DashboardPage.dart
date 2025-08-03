@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'models/flood_data.dart';
 import 'services/weather_service.dart';
+import 'services/user_service.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -21,6 +22,9 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     _availableCities = WeatherService.getMumbaiCities();
+    _selectedCity = UserService.getSelectedCity().isNotEmpty 
+        ? UserService.getSelectedCity() 
+        : 'Andheri';
     _loadData();
   }
 
@@ -55,10 +59,11 @@ class _DashboardPageState extends State<DashboardPage> {
     _loadData();
   }
 
-  void _changeCity(String city) {
+  void _changeCity(String city) async {
     setState(() {
       _selectedCity = city;
     });
+    await UserService.updateSelectedCity(city);
     _loadData();
   }
 
@@ -89,7 +94,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Hello, Akash!\nStay safe this monsoon.',
+                          'Hello, ${UserService.getUserName().isNotEmpty ? UserService.getUserName() : 'User'}!\nStay safe this monsoon.',
                           style: GoogleFonts.poppins(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,

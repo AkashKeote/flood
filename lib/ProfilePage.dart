@@ -1,8 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'services/user_service.dart';
+import 'LoginScreen.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Logout'),
+          content: Text('Are you sure you want to logout?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await UserService.logout();
+                if (mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    (route) => false,
+                  );
+                }
+              },
+              child: Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +131,7 @@ class ProfilePage extends StatelessWidget {
                   ),
                   SizedBox(height: 16),
                   Text(
-                    'Akash',
+                    UserService.getUserName().isNotEmpty ? UserService.getUserName() : 'User',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -113,7 +151,7 @@ class ProfilePage extends StatelessWidget {
                     children: [
                       _ComicInfoItem(
                         icon: Icons.location_on_rounded,
-                        label: 'Mumbai',
+                        label: UserService.getSelectedCity().isNotEmpty ? UserService.getSelectedCity() : 'Mumbai',
                         color: Color(0xFFD6EAF8),
                       ),
                       _ComicInfoItem(
@@ -228,7 +266,7 @@ class ProfilePage extends StatelessWidget {
                     icon: Icons.logout_rounded,
                     label: 'Logout',
                     color: Color(0xFFB5C7F7),
-                    onTap: () {},
+                    onTap: () => _showLogoutDialog(context),
                   ),
                 ),
               ],
