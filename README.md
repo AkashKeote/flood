@@ -12,5 +12,3 @@
 | Population                                     | [Population](./population)                          |
 | Rainfall                                       | [Rainfall](./rainfall)                              |
 | Road density                                   | [Road density](./road%20density)                    |
-
-
