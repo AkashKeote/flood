@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'DashboardPage.dart';
 import 'FloodPredictionPage.dart';
-import 'MapPage.dart';
+import 'RoutePage.dart';
 import 'EmergencyPage.dart';
 import 'ProfilePage.dart';
 import 'dart:ui';
@@ -356,7 +356,7 @@ class _DashboardMaterialState extends State<DashboardMaterial> {
   static final List<Widget> _screens = <Widget>[
     DashboardPage(),
     FloodPredictionPage(),
-    MapPage(),
+    RoutePage(),
     EmergencyPage(),
     ProfilePage(),
   ];
@@ -446,8 +446,8 @@ class _DashboardMaterialState extends State<DashboardMaterial> {
                   onTap: () => _onItemTapped(1),
                 ),
                 _DashboardNavItem(
-                  icon: Icons.map_rounded,
-                  label: 'Map',
+                  icon: Icons.route_rounded,
+                  label: 'Routes',
                   isSelected: _selectedIndex == 2,
                   onTap: () => _onItemTapped(2),
                 ),
