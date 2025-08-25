@@ -1,8 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'user_service.dart';
+import 'UserSetupPage.dart';
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
+
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  String userName = 'User';
+  String userWard = 'Ward';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    final name = await UserService.getUserName();
+    final ward = await UserService.getUserWard();
+    
+    setState(() {
+      userName = name ?? 'User';
+      userWard = ward ?? 'Ward';
+    });
+  }
+
+  Future<void> _logout() async {
+    await UserService.logout();
+    
+    // Navigate to UserSetupPage
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const UserSetupPage()),
+      (route) => false,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +129,7 @@ class ProfilePage extends StatelessWidget {
                   ),
                   SizedBox(height: 16),
                   Text(
-                    'Akash',
+                    userName,
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -101,7 +137,7 @@ class ProfilePage extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'akash@example.com',
+                    '$userWard, Mumbai',
                     style: TextStyle(
                       color: Color(0xFF22223B).withOpacity(0.7),
                       fontSize: 14,
@@ -227,8 +263,8 @@ class ProfilePage extends StatelessWidget {
                   child: _ComicActionCard(
                     icon: Icons.logout_rounded,
                     label: 'Logout',
-                    color: Color(0xFFB5C7F7),
-                    onTap: () {},
+                    color: Color(0xFFFFCDD2),
+                    onTap: _logout,
                   ),
                 ),
               ],

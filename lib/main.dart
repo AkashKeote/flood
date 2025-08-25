@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'DashboardPage.dart';
-import 'FloodPredictionPage.dart';
+import 'package:flood/FloodPredictionPage.dart';
 import 'RoutePage.dart';
 import 'EmergencyPage.dart';
 import 'ProfilePage.dart';
 import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
 import 'SplashScreen.dart';
+import 'UserSetupPage.dart';
+import 'user_service.dart';
 
 void main() {
   runApp(const FloodManagementApp());
@@ -207,12 +209,17 @@ class _LoadingScreenState extends State<LoadingScreen>
       });
     });
 
-    // Navigate to dashboard after loading
-    Future.delayed(const Duration(seconds: 3), () {
+    // Navigate to user setup page or dashboard after loading
+    Future.delayed(const Duration(seconds: 3), () async {
       if (mounted) {
+        // Check if user is already logged in
+        final isLoggedIn = await UserService.isLoggedIn();
+        
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => const DashboardMaterial(),
+            builder: (context) => isLoggedIn 
+                ? const DashboardMaterial() 
+                : const UserSetupPage(),
           ),
         );
       }
@@ -365,44 +372,6 @@ class _DashboardMaterialState extends State<DashboardMaterial> {
     setState(() {
       _selectedIndex = index;
     });
-  }
-
-  void _showQuickActions() {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.red,
-              ),
-              title: const Text('View Flood Alerts'),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(Icons.analytics, color: Colors.teal),
-              title: const Text('Predict Flood Risk'),
-              onTap: () {},
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.phone_in_talk_rounded,
-                color: Colors.blue,
-              ),
-              title: const Text('Emergency Contacts'),
-              onTap: () {},
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   @override

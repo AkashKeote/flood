@@ -1,0 +1,85 @@
+# ==================================
+# FRONTEND FILES (GitHub Pages only)
+# ==================================
+index.html
+manifest.json
+flutter_bootstrap.js
+main.dart.js
+flutter_service_worker.js
+flutter.js
+favicon.png
+version.json
+assets/
+canvaskit/
+icons/
+web/
+build/web/
+
+# ==================================
+# FLUTTER PROJECT FILES
+# ==================================
+lib/
+windows/
+linux/
+macos/
+test/
+android/
+ios/
+pubspec.yaml
+pubspec.lock
+*.dart
+*.iml
+flutter_integration/
+
+# ==================================
+# DEVELOPMENT FILES
+# ==================================
+cache/
+build/
+Dataset/
+__pycache__/
+*.zip
+*.graphml
+*.gz
+*.tar
+*.rar
+FinalLogin/
+Eva/
+Modell/
+
+# ==================================
+# TEMPORARY & IDE FILES
+# ==================================
+*.tmp
+*.temp
+tmp/
+temp/
+.vscode/
+.idea/
+.dart_tool/
+.packages
+
+# ==================================
+# GIT & VERSION CONTROL
+# ==================================
+.git/
+.gitignore
+
+# ==================================
+# LARGE MODEL FILES
+# ==================================
+*.joblib
+*.pkl
+*.model
+
+# ==================================
+# DOCUMENTATION & README
+# ==================================
+*.md
+README*
+INTEGRATION*
+ROUTE_MAP*
+FLOOD_PREDICTION*
+BACKEND_DEPLOYED*
+*.md
+deploy.*

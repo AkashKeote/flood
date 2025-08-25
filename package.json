@@ -1,0 +1,16 @@
+{
+  "name": "flood-prediction-app",
+  "version": "1.0.0",
+  "description": "Flood Prediction System with Flutter Frontend and Python Backend",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo 'Build completed'",
+    "start": "echo 'Starting application'"
+  },
+  "keywords": ["flood", "prediction", "flutter", "python", "machine-learning"],
+  "author": "Your Name",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.x"
+  }
+}
