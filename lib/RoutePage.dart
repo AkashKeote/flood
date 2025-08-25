@@ -5,6 +5,9 @@ import 'dart:math';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
+import 'geojson_layer.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter/services.dart';
 
 class RoutePage extends StatefulWidget {
   const RoutePage({super.key});
@@ -25,6 +28,100 @@ class _RoutePageState extends State<RoutePage> {
   int _numRoutes = 5;
   bool _showPOIs = false;
   String _selectedMapStyle = 'OpenStreetMap';
+  bool _isDarkMode = false;
+  bool _showRoadRisk = true;
+  bool _useHtmlMap = false; // Toggle between Flutter map and HTML map
+  late WebViewController _webViewController;
+  
+  @override
+  void initState() {
+    super.initState();
+    _updateFilteredRoutes();
+    _fetchRealTimeFloodRisk();
+    _initializeWebView();
+  }
+  
+  void _updateFilteredRoutes() {
+    // This method can be used for any route filtering logic if needed
+    // For now, it's just a placeholder
+  }
+
+  void _initializeWebView() async {
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (int progress) {
+            // Progress indicator
+          },
+          onPageStarted: (String url) {},
+          onPageFinished: (String url) {},
+        ),
+      );
+    
+    // Load the HTML map
+    await _loadHtmlMap();
+  }
+
+  Future<void> _loadHtmlMap() async {
+    try {
+      final String htmlContent = await rootBundle.loadString('assets/mumbai_evacuation_routes.html');
+      await _webViewController.loadHtmlString(htmlContent);
+    } catch (e) {
+      print('Error loading HTML map: $e');
+    }
+  }
+  
+  // Risk zone colors (matching alit.py)
+  final Map<String, Color> _riskColors = {
+    'low': Color(0xFF1a9850),      // Green
+    'moderate': Color(0xFFfc8d59), // Orange  
+    'high': Color(0xFFd73027),     // Red
+    'unknown': Color(0xFF9e9e9e),  // Gray
+  };
+  
+  // Mumbai flood risk areas data (expanded for better visualization like alit.py)
+  final List<Map<String, dynamic>> _floodRiskAreas = [
+    {'name': 'Andheri East', 'lat': 19.1136, 'lng': 72.8697, 'risk': 'moderate'},
+    {'name': 'Bandra West', 'lat': 19.0596, 'lng': 72.8295, 'risk': 'low'},
+    {'name': 'Kurla East', 'lat': 19.0728, 'lng': 72.8826, 'risk': 'high'},
+    {'name': 'Malad West', 'lat': 19.1864, 'lng': 72.8493, 'risk': 'moderate'},
+    {'name': 'Thane West', 'lat': 19.2183, 'lng': 72.9781, 'risk': 'low'},
+    {'name': 'Borivali East', 'lat': 19.2307, 'lng': 72.8567, 'risk': 'moderate'},
+    {'name': 'Powai', 'lat': 19.1197, 'lng': 72.9089, 'risk': 'high'},
+    {'name': 'Versova', 'lat': 19.1317, 'lng': 72.8122, 'risk': 'moderate'},
+    {'name': 'Juhu', 'lat': 19.1075, 'lng': 72.8263, 'risk': 'low'},
+    {'name': 'Santa Cruz East', 'lat': 19.0825, 'lng': 72.8417, 'risk': 'high'},
+    
+    // Additional risk zones for better coverage
+    {'name': 'Goregaon East', 'lat': 19.1663, 'lng': 72.8526, 'risk': 'moderate'},
+    {'name': 'Kandivali East', 'lat': 19.2081, 'lng': 72.8673, 'risk': 'low'},
+    {'name': 'Mulund West', 'lat': 19.1743, 'lng': 72.9562, 'risk': 'high'},
+    {'name': 'Bhandup West', 'lat': 19.1444, 'lng': 72.9367, 'risk': 'moderate'},
+    {'name': 'Chembur East', 'lat': 19.0627, 'lng': 72.8972, 'risk': 'high'},
+    {'name': 'Ghatkopar West', 'lat': 19.0861, 'lng': 72.9081, 'risk': 'moderate'},
+    {'name': 'Vikhroli East', 'lat': 19.1059, 'lng': 72.9293, 'risk': 'high'},
+    {'name': 'Khar West', 'lat': 19.0716, 'lng': 72.8370, 'risk': 'low'},
+    {'name': 'Worli', 'lat': 19.0177, 'lng': 72.8134, 'risk': 'moderate'},
+    {'name': 'Lower Parel', 'lat': 18.9969, 'lng': 72.8302, 'risk': 'high'},
+    {'name': 'Matunga East', 'lat': 19.0330, 'lng': 72.8570, 'risk': 'low'},
+    {'name': 'Dadar West', 'lat': 19.0178, 'lng': 72.8478, 'risk': 'moderate'},
+    {'name': 'Colaba', 'lat': 18.9067, 'lng': 72.8147, 'risk': 'low'},
+    {'name': 'Fort', 'lat': 18.9338, 'lng': 72.8342, 'risk': 'moderate'},
+    {'name': 'Marine Drive', 'lat': 18.9441, 'lng': 72.8230, 'risk': 'low'},
+  ];
+  
+  // Shelter locations with types
+  final List<Map<String, dynamic>> _shelterLocations = [
+    {'name': 'Phoenix Mall Kurla', 'lat': 19.0895, 'lng': 72.8839, 'type': 'mall', 'capacity': 5000},
+    {'name': 'Andheri Sports Complex', 'lat': 19.1197, 'lng': 72.8489, 'type': 'sports', 'capacity': 3000},
+    {'name': 'Bandra Community Center', 'lat': 19.0544, 'lng': 72.8181, 'type': 'community', 'capacity': 1500},
+    {'name': 'Thane Municipal School', 'lat': 19.2097, 'lng': 72.9694, 'type': 'school', 'capacity': 2000},
+    {'name': 'Malad Convention Hall', 'lat': 19.1956, 'lng': 72.8422, 'type': 'hall', 'capacity': 4000},
+    {'name': 'Borivali Sports Club', 'lat': 19.2411, 'lng': 72.8539, 'type': 'sports', 'capacity': 2500},
+    {'name': 'Versova Community Hall', 'lat': 19.1361, 'lng': 72.8094, 'type': 'community', 'capacity': 1200},
+    {'name': 'Juhu Beach Resort', 'lat': 19.0969, 'lng': 72.8264, 'type': 'hotel', 'capacity': 800},
+  ];
   
   // Individual POI category toggles
   Map<String, bool> _selectedPOICategories = {
@@ -41,6 +138,7 @@ class _RoutePageState extends State<RoutePage> {
     'water_tower': false,
     'bus_station': false,
     'train_station': false,
+    'shelter': true, // Enable shelters by default
   };
   
   // POI Categories matching Streamlit implementation exactly
@@ -58,6 +156,7 @@ class _RoutePageState extends State<RoutePage> {
     'water_tower': {'icon': Icons.water_drop, 'color': Colors.cyan[600]!, 'name': 'Water Tower (4)'},
     'bus_station': {'icon': Icons.directions_bus, 'color': Colors.blue[900]!, 'name': 'Bus Station (26)'},
     'train_station': {'icon': Icons.train, 'color': Colors.grey[700]!, 'name': 'Train Station (42)'},
+    'shelter': {'icon': Icons.home, 'color': Colors.green[600]!, 'name': 'Emergency Shelter (8)'},
   };
   
   // Map style options
@@ -492,6 +591,13 @@ class _RoutePageState extends State<RoutePage> {
       {'type': 'train_station', 'name': 'Dadar Railway Station', 'coord': LatLng(19.0178, 72.8478)},
       {'type': 'train_station', 'name': 'Borivali Railway Station', 'coord': LatLng(19.2307, 72.8567)},
       {'type': 'train_station', 'name': 'Thane Railway Station', 'coord': LatLng(19.2183, 72.9781)},
+      
+      // Emergency Shelters (8) - Added from _shelterLocations
+      ...(_shelterLocations.map((shelter) => {
+        'type': 'shelter',
+        'name': '${shelter['name']} (${shelter['capacity']} capacity)',
+        'coord': LatLng(shelter['lat'], shelter['lng']),
+      }).toList()),
     ];
   }
 
@@ -593,14 +699,25 @@ class _RoutePageState extends State<RoutePage> {
   }
 
   Color _getRouteColor(int index) {
-    const colors = [
-      Color(0xFF0078FF), // Blue
-      Color(0xFF1ABC9C), // Green
-      Color(0xFFF39C12), // Orange
-      Color(0xFFC0392B), // Red
-      Color(0xFF8E44AD), // Purple
+    // Risk-based route coloring (like alit.py)
+    // Routes to low-risk areas = green, moderate = orange, high = red
+    const safeColors = [
+      Color(0xFF1a9850), // Green (safe route)
+      Color(0xFF2ecc71), // Light green
+      Color(0xFF27ae60), // Medium green
     ];
-    return colors[index % colors.length];
+    
+    const moderateColors = [
+      Color(0xFFfc8d59), // Orange (moderate risk)
+      Color(0xFFf39c12), // Light orange
+    ];
+    
+    // Most routes should be safe (green) since we prioritize low-risk destinations
+    if (index < 3) {
+      return safeColors[index % safeColors.length];
+    } else {
+      return moderateColors[index % moderateColors.length];
+    }
   }
 
   Color _getRiskColor(String risk) {
@@ -1349,6 +1466,62 @@ class _RoutePageState extends State<RoutePage> {
                             
                             SizedBox(height: 16),
                             
+                            // Risk Zone Visualization Toggle
+                            Row(
+                              children: [
+                                Icon(Icons.warning, color: Color(0xFF22223B), size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Roads (risk-colored, sampled)',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF22223B),
+                                  ),
+                                ),
+                                Spacer(),
+                                Switch(
+                                  value: _showRoadRisk,
+                                  onChanged: (bool value) {
+                                    setState(() {
+                                      _showRoadRisk = value;
+                                    });
+                                  },
+                                  activeColor: Color(0xFFB5C7F7),
+                                ),
+                              ],
+                            ),
+                            
+                            SizedBox(height: 16),
+                            
+                            // HTML Map Toggle
+                            Row(
+                              children: [
+                                Icon(Icons.web, color: Color(0xFF22223B), size: 20),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Use HTML Map (exact alit.py)',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF22223B),
+                                  ),
+                                ),
+                                Spacer(),
+                                Switch(
+                                  value: _useHtmlMap,
+                                  onChanged: (bool value) {
+                                    setState(() {
+                                      _useHtmlMap = value;
+                                    });
+                                  },
+                                  activeColor: Color(0xFFB5C7F7),
+                                ),
+                              ],
+                            ),
+                            
+                            SizedBox(height: 16),
+                            
                             // POI Categories Selection
                             Row(
                               children: [
@@ -1470,7 +1643,7 @@ class _RoutePageState extends State<RoutePage> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(20),
-                          child: FlutterMap(
+                          child: _useHtmlMap ? WebViewWidget(controller: _webViewController) : FlutterMap(
                             mapController: _mapController,
                             options: MapOptions(
                               initialCenter: _areaCoordinates[_matchedLocation!] ?? LatLng(19.0760, 72.8777),
@@ -1484,6 +1657,12 @@ class _RoutePageState extends State<RoutePage> {
                                 urlTemplate: _mapStyles[_selectedMapStyle]!['url']!,
                                 userAgentPackageName: 'com.example.flood',
                                 subdomains: _selectedMapStyle.contains('CartoDB') ? ['a', 'b', 'c', 'd'] : ['a', 'b', 'c'],
+                              ),
+                              
+                              // GeoJSON Road Network with Risk Coloring (like alit.py)
+                              GeoJsonRoadLayer(
+                                showRoadRisk: _showRoadRisk,
+                                riskColors: _riskColors,
                               ),
                               
                               // Real Road-Following Route Polylines
@@ -1504,6 +1683,8 @@ class _RoutePageState extends State<RoutePage> {
                                       points: routePoints,
                                       strokeWidth: 6.0, // Even thicker for visibility
                                       color: route.routeColor,
+                                      borderStrokeWidth: 2.0,
+                                      borderColor: Colors.white.withOpacity(0.8),
                                     );
                                   }).toList(),
                                 ),
@@ -1626,6 +1807,50 @@ class _RoutePageState extends State<RoutePage> {
                                       ),
                                     );
                                   }),
+                                  
+                                  // Route Label Markers (hover info)
+                                  ...List.generate(_routes.length, (index) {
+                                    final route = _routes[index];
+                                    List<LatLng> routePoints = _routePoints[route.id] ?? [];
+                                    
+                                    if (routePoints.isNotEmpty && routePoints.length > 1) {
+                                      // Get midpoint of route for label placement
+                                      int midIndex = routePoints.length ~/ 2;
+                                      LatLng midPoint = routePoints[midIndex];
+                                      
+                                      return Marker(
+                                        point: midPoint,
+                                        width: 120,
+                                        height: 40,
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: route.routeColor.withOpacity(0.9),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Colors.white, width: 2),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withOpacity(0.3),
+                                                blurRadius: 4,
+                                                offset: Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Text(
+                                            '${route.destination.toUpperCase()}\n${route.distanceKm.toStringAsFixed(1)}km • ${route.estimatedTimeMinutes.toStringAsFixed(0)}min',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 8,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                              height: 1.1,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                    return null;
+                                  }).where((marker) => marker != null).cast<Marker>().toList(),
                                   
                                   // POI Markers (filtered by selected categories)
                                   if (_showPOIs) ..._getPOIMarkers().where((poi) {
@@ -1751,6 +1976,36 @@ class _RoutePageState extends State<RoutePage> {
                                 _buildRiskLegend('MOD', Color(0xFFfc8d59)),
                                 SizedBox(width: 4),
                                 _buildRiskLegend('HIGH', Color(0xFFd73027)),
+                              ],
+                            ),
+                            SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 20,
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    color: Colors.green[600],
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(Icons.home, color: Colors.white, size: 12),
+                                ),
+                                SizedBox(width: 8),
+                                Text('Emergency Shelters', style: GoogleFonts.poppins(fontSize: 14)),
+                                SizedBox(width: 20),
+                                if (_showRoadRisk) ...[
+                                  Container(
+                                    width: 20,
+                                    height: 20,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFFd73027).withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Color(0xFFd73027), width: 1),
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text('Risk Zones', style: GoogleFonts.poppins(fontSize: 14)),
+                                ],
                               ],
                             ),
                              SizedBox(height: 8),

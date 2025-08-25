@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'flood_prediction_service.dart';
-import 'mumbai_wards_data.dart';
+import 'mumbai_prediction_data.dart';
+import 'weather_service.dart';
+import 'user_service.dart';
+import 'ml_flood_predictor.dart';
 
 class FloodPredictionPage extends StatefulWidget {
   const FloodPredictionPage({super.key});
@@ -11,413 +13,426 @@ class FloodPredictionPage extends StatefulWidget {
 }
 
 class _FloodPredictionPageState extends State<FloodPredictionPage> {
-  String _selectedWard = 'Andheri East';
+  String _selectedRegion = 'Andheri East'; // Default region
+  String _userSelectedRegion = 'Andheri East'; // User's home region
   bool _isLoading = false;
+  bool _isLoadingAlternate = false;
+  bool _showAlternateRegion = false;
   Map<String, dynamic>? _predictionData;
+  Map<String, dynamic>? _alternateRegionData;
   String _errorMessage = '';
-  bool _serverHealthy = false;
   String _searchQuery = '';
   
-  // Using local data instead of API for wards
-  List<Map<String, dynamic>> _mumbaiWards = MumbaiWardsData.allWards;
+  // All regions from training data
+  List<String> _allRegions = MumbaiPredictionData.getAllRegionNames();
+  List<String> _filteredRegions = [];
 
   @override
   void initState() {
     super.initState();
-    _updateFilteredWards();
-    _checkServerHealth();
+    _updateFilteredRegions();
+    _loadUserRegion();
+    _loadUserRegionPrediction();
   }
 
-  Future<void> _checkServerHealth() async {
-    final healthy = await FloodPredictionService.checkServerHealth();
+  // Load user's selected region from UserService
+  Future<void> _loadUserRegion() async {
+    try {
+      final userData = await UserService.getUser();
+      if (userData != null && userData['area'] != null) {
+        final userArea = userData['area'].toString();
+        // Check if user's area exists in our trained regions (case-insensitive)
+        final matchingRegion = _allRegions.firstWhere(
+          (region) => region.toLowerCase() == userArea.toLowerCase(),
+          orElse: () => 'Andheri East', // Default fallback
+        );
+        
     setState(() {
-      _serverHealthy = healthy;
-    });
+          _userSelectedRegion = matchingRegion;
+          _selectedRegion = matchingRegion;
+        });
+        
+        print('👤 User region loaded: $matchingRegion');
+      }
+    } catch (e) {
+      print('❌ Error loading user region: $e');
+    }
   }
 
-  Future<void> _predictFlood() async {
+  // Load prediction for user's region automatically
+  Future<void> _loadUserRegionPrediction() async {
+    await _predictFloodForRegion(_userSelectedRegion, isUserRegion: true);
+  }
+
+  // Predict flood for any region
+  Future<void> _predictFloodForRegion(String regionName, {bool isUserRegion = false}) async {
     setState(() {
+      if (isUserRegion) {
       _isLoading = true;
+      } else {
+        _isLoadingAlternate = true;
+      }
       _errorMessage = '';
-      _predictionData = null;
     });
 
     try {
-      final result = await FloodPredictionService.predictFlood(_selectedWard);
+      // Get region static data
+      final regionData = MumbaiPredictionData.getRegionData(regionName);
+      if (regionData == null || regionData.isEmpty) {
+        throw Exception('Region not found in training data');
+      }
+
+      print('🏢 Predicting for region: $regionName');
+      
+      // Get weather forecast
+      final weatherResult = await WeatherService.getWeatherForecast(
+        latitude: regionData['latitude'],
+        longitude: regionData['longitude'],
+      );
+
+      if (!weatherResult['success']) {
+        throw Exception(weatherResult['error']);
+      }
+
+      final weatherData = weatherResult['data'];
+      
+      print('🌤️ Weather data received: ${weatherData.keys}');
+      print('🏢 Region data keys: ${regionData.keys}');
+      
+      // Calculate flood risk predictions using ML-inspired model
+      final predictions = MLFloodPredictor.predictFloodRisk(
+        staticData: regionData,
+        weatherData: weatherData,
+      );
       
       setState(() {
+        if (isUserRegion) {
         _isLoading = false;
-        _predictionData = result;
+          _predictionData = predictions;
+        } else {
+          _isLoadingAlternate = false;
+          _alternateRegionData = predictions;
+        }
       });
+      
+      print('✅ Prediction completed for $regionName');
+      
     } catch (e) {
+      print('❌ Prediction error: $e');
       setState(() {
+        if (isUserRegion) {
         _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        } else {
+          _isLoadingAlternate = false;
+        }
+        _errorMessage = 'Error predicting flood: $e';
       });
+    }
+  }
+
+
+
+  void _updateFilteredRegions() {
+    _filteredRegions = _allRegions.where((region) {
+      return region.toLowerCase().contains(_searchQuery.toLowerCase());
+    }).toList();
+    
+    // If current selected region is not in filtered list, reset to first item
+    if (_filteredRegions.isNotEmpty && !_filteredRegions.contains(_selectedRegion)) {
+      _selectedRegion = _filteredRegions.first;
     }
   }
 
   Color _getRiskColor(String risk) {
     switch (risk.toLowerCase()) {
-      case 'low':
-        return Colors.green;
-      case 'moderate':
-        return Colors.orange;
-      case 'high':
-        return Colors.red;
-      default:
-        return Colors.grey;
+      case 'critical': return Color(0xFFFF1744);
+      case 'high': return Color(0xFFFF5722);
+      case 'moderate': return Color(0xFFFF9800);
+      case 'low': return Color(0xFF4CAF50);
+      default: return Colors.grey;
     }
-  }
-
-  IconData _getRiskIcon(String risk) {
-    switch (risk.toLowerCase()) {
-      case 'low':
-        return Icons.check_circle;
-      case 'moderate':
-        return Icons.warning;
-      case 'high':
-        return Icons.error;
-      default:
-        return Icons.help;
-    }
-  }
-
-  // Filter wards based on search query
-  List<Map<String, dynamic>> _getFilteredWards() {
-    if (_searchQuery.isEmpty) {
-      return _mumbaiWards;
-    }
-    return _mumbaiWards.where((ward) => 
-      ward['name'].toLowerCase().contains(_searchQuery.toLowerCase()) ||
-      ward['code'].toLowerCase().contains(_searchQuery.toLowerCase())
-    ).toList();
-  }
-
-  // Cache filtered wards to prevent rebuilds
-  List<Map<String, dynamic>> _filteredWards = [];
-
-  void _updateFilteredWards() {
-    _filteredWards = _getFilteredWards();
-    // If current selected ward is not in filtered list, reset to first item
-    if (_filteredWards.isNotEmpty && !_filteredWards.any((ward) => ward['name'] == _selectedWard)) {
-      _selectedWard = _filteredWards.first['name'];
-    }
-  }
-
-  // Get selected ward risk level
-  String _getSelectedWardRisk() {
-    final ward = _mumbaiWards.firstWhere(
-      (ward) => ward['name'] == _selectedWard,
-      orElse: () => {'risk': 'Unknown'},
-    );
-    return ward['risk'] ?? 'Unknown';
-  }
-
-  // Get selected ward risk color
-  Color _getSelectedWardRiskColor() {
-    return _getRiskColor(_getSelectedWardRisk());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(bottom: 150), // Increased bottom padding
+      backgroundColor: Color(0xFFF5F5F5),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Color(0xFF22223B),
+        title: Text(
+          '🌊 Flood Prediction',
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: _isLoading 
+        ? _buildLoadingWidget()
+        : SingleChildScrollView(
+            padding: EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+                // User's Area Prediction Section
+                _buildUserAreaSection(),
+                
+                SizedBox(height: 24),
+                
+                // Alternative Region Section
+                _buildAlternativeRegionSection(),
+                
+                SizedBox(height: 20),
+              ],
+            ),
+          ),
+    );
+  }
+
+  Widget _buildLoadingWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22223B)),
+          ),
+          SizedBox(height: 16),
                 Text(
-                  'AI Flood Prediction',
-                  style: GoogleFonts.poppins(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF22223B),
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'Smart Analysis using Machine Learning & Weather Data',
+            'Fetching real-time weather data...',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     color: Color(0xFF666666),
                   ),
                 ),
-              ],
+          SizedBox(height: 8),
+          Text(
+            'This may take a few seconds',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Color(0xFF999999),
             ),
-          ),
-
-          // Model Info Cards
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              children: [
-                _InfoCard(
-                  title: 'Model Accuracy',
-                  value: '82.1%',
-                  icon: Icons.psychology,
-                  color: Color(0xFFF9E79F),
-                ),
-                SizedBox(width: 16),
-                _InfoCard(
-                  title: 'Data Sources',
-                  value: '19 Features',
-                  icon: Icons.analytics,
-                  color: Color(0xFFD6EAF8),
                 ),
               ],
             ),
-          ),
+    );
+  }
 
-          SizedBox(height: 24),
-
-          // Feature Chips
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18.0),
-            child: Wrap(
-              spacing: 10,
-              children: [
-                _FeatureChip(label: 'Weather API', color: Color(0xFFD6EAF8)),
-                _FeatureChip(label: 'Rainfall Data', color: Color(0xFFF9E79F)),
-                _FeatureChip(label: 'Urban Analysis', color: Color(0xFFB5C7F7)),
-                _FeatureChip(label: 'ML Ensemble', color: Color(0xFFE8D5C4)),
-              ],
-            ),
-          ),
-
-          SizedBox(height: 28),
-
-          // City Selection Card
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Container(
+  Widget _buildUserAreaSection() {
+    return Container(
               width: double.infinity,
-              constraints: BoxConstraints(
-                minHeight: 380, // Increased to handle two-line dropdown items
-              ),
-              padding: EdgeInsets.all(20), // Increased padding
+      padding: EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.08),
-                    blurRadius: 16,
-                    offset: Offset(0, 8),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 4),
                   ),
                 ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+          // Header
                   Row(
                     children: [
-                      Icon(Icons.location_on, color: Color(0xFFB5C7F7), size: 28),
+              Icon(Icons.home, color: Color(0xFF22223B), size: 24),
                       SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Select Mumbai Ward for Analysis (${_mumbaiWards.length} wards)',
-                          style: TextStyle(
+                  'Your Area: $_userSelectedRegion',
+                  style: GoogleFonts.poppins(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                             color: Color(0xFF22223B),
                           ),
                         ),
                       ),
-                      if (!_serverHealthy)
+              if (_predictionData != null)
                         Container(
-                          margin: EdgeInsets.only(left: 8),
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
-                            color: Colors.orange,
-                            borderRadius: BorderRadius.circular(12),
+                    color: _getRiskColor(_predictionData!['overall_risk']),
+                    borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            'OFFLINE',
-                            style: TextStyle(
+                    _predictionData!['overall_risk'].toUpperCase(),
+                    style: GoogleFonts.poppins(
                               color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
                     ],
                   ),
-                  SizedBox(height: 18), // Reduced spacing
-                  
-                  // Search Bar
-                  TextField(
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                        _updateFilteredWards();
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Search ward name (e.g., Andheri, Bandra)...',
-                      prefixIcon: Icon(Icons.search, color: Color(0xFFB5C7F7)),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: BorderSide(color: Color(0xFFB5C7F7)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
-                      ),
-                    ),
-                  ),
-                  
-                  SizedBox(height: 12), // Reduced spacing
-                  
-                  // Selected Ward Display
+          
+          if (_errorMessage.isNotEmpty) ...[
+            SizedBox(height: 16),
                   Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
+              padding: EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Color(0xFFB5C7F7).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: Color(0xFFB5C7F7).withOpacity(0.3)),
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.location_city, color: Color(0xFFB5C7F7), size: 20),
-                        SizedBox(width: 12),
+                  Icon(Icons.error, color: Colors.red, size: 20),
+                  SizedBox(width: 8),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Selected Ward:',
-                                style: TextStyle(
+                    child: Text(
+                      _errorMessage,
+                      style: GoogleFonts.poppins(
+                        color: Colors.red,
                                   fontSize: 14,
-                                  color: Color(0xFF666666),
-                                ),
-                              ),
-                              Text(
-                                _selectedWard,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF22223B),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: _getSelectedWardRiskColor(),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            _getSelectedWardRisk(),
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  
-                  SizedBox(height: 10), // Reduced spacing
-                  
-                  // Dropdown for Ward Selection
-                  DropdownButtonFormField<String>(
-                    value: _filteredWards.any((ward) => ward['name'] == _selectedWard) ? _selectedWard : null,
-                    decoration: InputDecoration(
-                      labelText: 'Choose Ward',
-                      prefixIcon: Icon(Icons.apartment, color: Color(0xFFB5C7F7)),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: BorderSide(color: Color(0xFFB5C7F7)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(15),
-                        borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
-                      ),
-                    ),
-                    items: _filteredWards.map((ward) {
-                      return DropdownMenuItem<String>(
-                        value: ward['name'],
-                        child: Container(
-                          height: 48, // Fixed height to prevent overflow
+          ],
+          
+                     if (_predictionData != null) ...[
+             SizedBox(height: 20),
+             _buildMLModelInfo(_predictionData!),
+             SizedBox(height: 16),
+             _build7DayForecast(_predictionData!),
+           ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlternativeRegionSection() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header with expand/collapse
+          InkWell(
+            onTap: () {
+              setState(() {
+                _showAlternateRegion = !_showAlternateRegion;
+              });
+            },
                           child: Row(
                             children: [
-                              Container(
-                                width: 3,
-                                height: 14,
-                                decoration: BoxDecoration(
-                                  color: _getRiskColor(ward['risk']),
-                                  borderRadius: BorderRadius.circular(1),
-                                ),
-                              ),
-                              SizedBox(width: 8),
+                Icon(Icons.explore, color: Color(0xFF22223B), size: 24),
+                SizedBox(width: 12),
                               Expanded(
-                                child: RichText(
-                                  overflow: TextOverflow.ellipsis,
-                                  text: TextSpan(
-                                    children: [
-                                      TextSpan(
-                                        text: ward['name'],
-                                        style: TextStyle(
-                                          fontSize: 13,
+                  child: Text(
+                    '🔍 Explore Other Regions',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
                                           fontWeight: FontWeight.w600,
                                           color: Color(0xFF22223B),
                                         ),
                                       ),
-                                      TextSpan(
-                                        text: '\nWard ${ward['code']} • ${ward['risk']} Risk',
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          color: Color(0xFF666666),
                                         ),
+                Icon(
+                  _showAlternateRegion ? Icons.expand_less : Icons.expand_more,
+                  color: Color(0xFF22223B),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
+          
+          if (_showAlternateRegion) ...[
+            SizedBox(height: 20),
+            
+            // Search Bar
+            TextField(
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                  _updateFilteredRegions();
+                });
+              },
+              decoration: InputDecoration(
+                hintText: 'Search region (e.g., Bandra, Colaba)...',
+                prefixIcon: Icon(Icons.search, color: Color(0xFF22223B)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Color(0xFF22223B), width: 2),
+                ),
+              ),
+            ),
+            
+            SizedBox(height: 16),
+            
+            // Region Dropdown
+            DropdownButtonFormField<String>(
+              value: _filteredRegions.contains(_selectedRegion) ? _selectedRegion : null,
+              decoration: InputDecoration(
+                labelText: 'Select Region',
+                prefixIcon: Icon(Icons.location_city, color: Color(0xFF22223B)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Color(0xFF22223B), width: 2),
+                ),
+              ),
+              items: _filteredRegions.map((region) {
+                return DropdownMenuItem<String>(
+                  value: region,
+                  child: Text(
+                    region,
+                    style: GoogleFonts.poppins(fontSize: 14),
                         ),
                       );
                     }).toList(),
-                    onChanged: (String? value) {
-                      if (value != null && _filteredWards.any((ward) => ward['name'] == value)) {
+              onChanged: (String? newValue) {
+                if (newValue != null) {
                         setState(() {
-                          _selectedWard = value;
+                    _selectedRegion = newValue;
                         });
                       }
                     },
-                    isExpanded: true,
-                    menuMaxHeight: 180, // Fixed height to prevent overflow
                   ),
                   
-                  SizedBox(height: 15), // Reduced spacing
+            SizedBox(height: 16),
                   
                   // Predict Button
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _predictFlood,
+                onPressed: _isLoadingAlternate ? null : () {
+                  _predictFloodForRegion(_selectedRegion, isUserRegion: false);
+                },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Color(0xFFB5C7F7),
+                  backgroundColor: Color(0xFF22223B),
                         padding: EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: _isLoading
+                child: _isLoadingAlternate
                           ? Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -431,339 +446,305 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                                 ),
                                 SizedBox(width: 12),
                                 Text(
-                                  'Analyzing Weather & Terrain...',
-                                  style: TextStyle(
+                          'Predicting...',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
                                     fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                            fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ],
                             )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.psychology, color: Colors.white),
-                                SizedBox(width: 8),
-                                Text(
+                  : Text(
                                   'Predict Flood Risk',
-                                  style: TextStyle(
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
                                     fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ],
+                        fontWeight: FontWeight.w600,
+                      ),
               ),
             ),
           ),
 
-          SizedBox(height: 28),
-
-          // Results Section
-          if (_errorMessage.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Container(
-                padding: EdgeInsets.all(20),
+            if (_alternateRegionData != null) ...[
+              SizedBox(height: 20),
+              Container(
+                padding: EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.red.shade200),
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.error, color: Colors.red),
-                    SizedBox(width: 12),
+                    Row(
+                  children: [
                     Expanded(
                       child: Text(
-                        _errorMessage,
-                        style: TextStyle(color: Colors.red.shade700),
-                      ),
-                    ),
-                  ],
+                            'Results for: ${_alternateRegionData!['region_name']}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF22223B),
                 ),
               ),
             ),
-
-          if (_predictionData != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                children: [
-                  // Main Prediction Card
                   Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(24),
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.08),
-                          blurRadius: 16,
-                          offset: Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        // Risk Level
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              _getRiskIcon(_predictionData!['prediction'] ?? 'Unknown'),
-                              color: _getRiskColor(_predictionData!['prediction'] ?? 'Unknown'),
-                              size: 32,
-                            ),
-                            SizedBox(width: 12),
-                            Text(
-                              'Flood Risk: ${(_predictionData!['prediction'] ?? 'Unknown').toUpperCase()}',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: _getRiskColor(_predictionData!['prediction'] ?? 'Unknown'),
-                              ),
-                            ),
-                          ],
-                        ),
-                        
-                        SizedBox(height: 16),
-                        
-                        // Confidence
-                        Container(
-                          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: Color(0xFFF7F6F2),
+                            color: _getRiskColor(_alternateRegionData!['overall_risk']),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            'Confidence: ${(_predictionData!['confidence'] ?? 0.0).toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontSize: 16,
+                            _alternateRegionData!['overall_risk'].toUpperCase(),
+                            style: GoogleFonts.poppins(
+                      color: Colors.white,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF22223B),
                             ),
                           ),
                         ),
-                        
-                        SizedBox(height: 20),
-                        
-                        // Weather Info
-                        if (_predictionData!['weather_data'] != null) ...[
-                          Divider(color: Colors.grey.shade200),
-                          SizedBox(height: 16),
-                          Text(
-                            'Current Weather in $_selectedWard',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF22223B),
-                            ),
-                          ),
-                          SizedBox(height: 12),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              _WeatherInfo(
-                                icon: Icons.thermostat,
-                                label: 'Temperature',
-                                value: '${_predictionData!['weather_data']['temperature']}°C',
-                              ),
-                              _WeatherInfo(
-                                icon: Icons.water_drop,
-                                label: 'Humidity',
-                                value: '${_predictionData!['weather_data']['humidity']}%',
-                              ),
-                              _WeatherInfo(
-                                icon: Icons.air,
-                                label: 'Wind Speed',
-                                value: '${_predictionData!['weather_data']['wind_speed']} m/s',
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 12),
-                          Text(
-                            'Condition: ${_predictionData!['weather_data']['description']}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Color(0xFF666666),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
-                  ),
-                  
-                  SizedBox(height: 16),
-                  
-                  // Additional Info
-                  Container(
-                    padding: EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: Color(0xFFF7F6F2),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Model Analysis',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF22223B),
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'This prediction is based on real-time weather data combined with geographic and urban characteristics specific to $_selectedWard ward in Mumbai. The model uses an ensemble of Random Forest and XGBoost algorithms trained on comprehensive flood data.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Color(0xFF666666),
-                          ),
-                        ),
-                        if (_predictionData!['rainfall_estimate'] != null) ...[
-                          SizedBox(height: 12),
-                          Text(
-                            'Estimated Rainfall: ${_predictionData!['rainfall_estimate'].toStringAsFixed(1)} mm',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF22223B),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+                    SizedBox(height: 16),
+                    _build7DayForecast(_alternateRegionData!),
+                  ],
+                ),
               ),
-            ),
-
-          SizedBox(height: 80), // Increased spacing at bottom
+            ],
+          ],
         ],
-        ),
-      ),
       ),
     );
   }
-}
 
-class _InfoCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _InfoCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.08),
-              blurRadius: 16,
-              offset: Offset(0, 8),
+  Widget _build7DayForecast(Map<String, dynamic> predictionData) {
+    final dailyPredictions = predictionData['daily_predictions'] as List<Map<String, dynamic>>;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '📅 7-Day Forecast',
+          style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF22223B),
+                            ),
+                          ),
+        SizedBox(height: 12),
+        
+        // Daily cards
+        ...dailyPredictions.map((day) {
+          final date = DateTime.parse(day['date']);
+          final dayName = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][date.weekday - 1];
+          
+          return Container(
+            margin: EdgeInsets.only(bottom: 8),
+            padding: EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+                             border: Border.all(
+                 color: _getRiskColor(day['risk_level']).withOpacity(0.3),
+                 width: 1,
+               ),
             ),
-          ],
+            child: Row(
+                            children: [
+                // Day
+                SizedBox(
+                  width: 50,
+                  child: Text(
+                    '$dayName\n${date.day}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                              color: Color(0xFF666666),
+                            ),
+                    textAlign: TextAlign.center,
+                    ),
+                  ),
+                  
+                SizedBox(width: 12),
+                  
+                // Risk Level
+                  Container(
+                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                     color: _getRiskColor(day['risk_level']),
+                     borderRadius: BorderRadius.circular(12),
+                   ),
+                  child: Text(
+                    day['risk_level'],
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                
+                SizedBox(width: 12),
+                
+                                 // Weather info
+                 Expanded(
+                   child: Column(
+                     crossAxisAlignment: CrossAxisAlignment.start,
+                     children: [
+                       Text(
+                         '${day['precipitation'].toStringAsFixed(1)}mm rain',
+                         style: GoogleFonts.poppins(
+                           fontSize: 12,
+                           fontWeight: FontWeight.w500,
+                           color: Color(0xFF22223B),
+                         ),
+                       ),
+                       if (day['intensity'] > 0)
+                         Text(
+                           'Intensity: ${day['intensity'].toStringAsFixed(1)}mm/hr',
+                           style: GoogleFonts.poppins(
+                             fontSize: 10,
+                             color: Color(0xFF666666),
+                           ),
+                         ),
+                       if (day['confidence'] != null)
+                         Text(
+                           'Confidence: ${(day['confidence'] * 100).toStringAsFixed(0)}%',
+                           style: GoogleFonts.poppins(
+                             fontSize: 9,
+                             color: Colors.blue,
+                             fontWeight: FontWeight.w500,
+                           ),
+                         ),
+                     ],
+                   ),
+                 ),
+                ],
+            ),
+          );
+        }).toList(),
+        
+        SizedBox(height: 12),
+        
+        // Summary
+        Container(
+          padding: EdgeInsets.all(12),
+        decoration: BoxDecoration(
+            color: Colors.blue.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blue.withOpacity(0.2)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: Color(0xFF22223B), size: 32),
-            SizedBox(height: 12),
             Text(
-              title,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
+                'Weekly Summary',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 color: Color(0xFF22223B),
               ),
             ),
-            SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF22223B),
+              SizedBox(height: 8),
+              Text(
+                'Total Rainfall: ${(predictionData['weather_summary']?['total_rainfall_7days'] ?? 0.0).toStringAsFixed(1)}mm',
+                style: GoogleFonts.poppins(fontSize: 12, color: Color(0xFF666666)),
               ),
+            Text(
+                'Rainy Days: ${predictionData['weather_summary']?['rainy_days_count'] ?? 0}',
+                style: GoogleFonts.poppins(fontSize: 12, color: Color(0xFF666666)),
+              ),
+              Text(
+                'Max Intensity: ${(predictionData['weather_summary']?['max_intensity'] ?? 0.0).toStringAsFixed(1)}mm/hr',
+                style: GoogleFonts.poppins(fontSize: 12, color: Color(0xFF666666)),
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _FeatureChip extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _FeatureChip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      label: Text(
-        label,
-        style: TextStyle(color: Color(0xFF22223B)),
-      ),
-      backgroundColor: color,
-      shape: StadiumBorder(),
-    );
-  }
-}
-
-class _WeatherInfo extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _WeatherInfo({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: Color(0xFF22223B), size: 24),
-        SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Color(0xFF666666),
-          ),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF22223B),
-          ),
-        ),
       ],
-    );
+         );
+   }
+
+   Widget _buildMLModelInfo(Map<String, dynamic> predictionData) {
+     final modelInfo = predictionData['model_info'];
+     final confidence = (predictionData['confidence'] * 100).toStringAsFixed(1);
+     
+     return Container(
+       padding: EdgeInsets.all(16),
+       decoration: BoxDecoration(
+         color: Colors.blue.withOpacity(0.05),
+         borderRadius: BorderRadius.circular(12),
+         border: Border.all(color: Colors.blue.withOpacity(0.2)),
+       ),
+       child: Column(
+         crossAxisAlignment: CrossAxisAlignment.start,
+         children: [
+           Row(
+             children: [
+               Icon(Icons.psychology, color: Colors.blue, size: 20),
+               SizedBox(width: 8),
+               Text(
+                 'ML Model Prediction',
+                 style: GoogleFonts.poppins(
+                   fontSize: 14,
+                   fontWeight: FontWeight.w600,
+                   color: Color(0xFF22223B),
+                 ),
+               ),
+               Spacer(),
+               Container(
+                 padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                 decoration: BoxDecoration(
+                   color: Colors.green,
+                   borderRadius: BorderRadius.circular(12),
+                 ),
+                 child: Text(
+                   '$confidence% Confidence',
+                   style: GoogleFonts.poppins(
+                     color: Colors.white,
+                     fontSize: 10,
+                     fontWeight: FontWeight.w600,
+                   ),
+                 ),
+               ),
+             ],
+           ),
+           SizedBox(height: 12),
+           Text(
+             'Algorithm: ${modelInfo['algorithm']}',
+             style: GoogleFonts.poppins(fontSize: 12, color: Color(0xFF666666)),
+           ),
+           Text(
+             'Training Accuracy: ${(modelInfo['accuracy_estimate'] * 100).toStringAsFixed(1)}%',
+             style: GoogleFonts.poppins(fontSize: 12, color: Color(0xFF666666)),
+           ),
+           Text(
+             'Features: ${modelInfo['features_used'].length} variables analyzed',
+             style: GoogleFonts.poppins(fontSize: 12, color: Color(0xFF666666)),
+           ),
+           SizedBox(height: 8),
+           Text(
+             'Prevents overfitting through ensemble voting and calibration',
+             style: GoogleFonts.poppins(
+               fontSize: 11,
+               color: Color(0xFF999999),
+               fontStyle: FontStyle.italic,
+             ),
+           ),
+         ],
+       ),
+     );
+   }
+ }
+ 
+ // Extension to convert hex color strings to Color objects
+ extension ColorExtension on Color {
+  static Color fromHex(String hexString) {
+    final buffer = StringBuffer();
+    if (hexString.length == 6 || hexString.length == 7) buffer.write('ff');
+    buffer.write(hexString.replaceFirst('#', ''));
+    return Color(int.parse(buffer.toString(), radix: 16));
   }
 }

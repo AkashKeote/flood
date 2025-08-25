@@ -47,6 +47,23 @@ class UserService {
     await prefs.setBool(_isLoggedInKey, false);
   }
 
+  // Get all user data
+  static Future<Map<String, dynamic>?> getUser() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isLoggedIn = prefs.getBool(_isLoggedInKey) ?? false;
+    
+    if (!isLoggedIn) {
+      return null;
+    }
+    
+    return {
+      'name': prefs.getString(_nameKey),
+      'email': prefs.getString(_emailKey),
+      'area': prefs.getString(_wardKey), // Using 'area' to match the expected key
+      'isLoggedIn': isLoggedIn,
+    };
+  }
+
   // Clear all user data
   static Future<void> clearUserData() async {
     final prefs = await SharedPreferences.getInstance();
