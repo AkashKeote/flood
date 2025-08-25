@@ -44,3 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 .vercel
+
+# Environment files with secrets
+.env
+.env.*
+api/.env
+server/.env
