@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:convert';
 import 'dart:math';
-import 'package:flutter_map/flutter_map.dart';
+import 'dart:html' as html;
+import 'dart:ui_web' as ui_web;
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:http/http.dart' as http;
-import 'geojson_layer.dart';
-import 'package:webview_flutter/webview_flutter.dart';
-import 'package:flutter/services.dart';
-
+import 'backend_api_service.dart';
+void main() {
+  runApp(const RoutePage());
+}
 class RoutePage extends StatefulWidget {
   const RoutePage({super.key});
 
@@ -18,110 +18,17 @@ class RoutePage extends StatefulWidget {
 
 class _RoutePageState extends State<RoutePage> {
   final TextEditingController _locationController = TextEditingController();
-  final MapController _mapController = MapController();
   bool _isLoading = false;
   List<EvacuationRoute> _routes = [];
-  Map<int, List<LatLng>> _routePoints = {}; // Store route points for each route
   String? _matchedLocation;
   int _matchScore = 0;
   double _speedKmph = 25.0;
   int _numRoutes = 5;
   bool _showPOIs = false;
   String _selectedMapStyle = 'OpenStreetMap';
-  bool _isDarkMode = false;
-  bool _showRoadRisk = true;
-  bool _useHtmlMap = false; // Toggle between Flutter map and HTML map
-  late WebViewController _webViewController;
-  
-  @override
-  void initState() {
-    super.initState();
-    _updateFilteredRoutes();
-    _fetchRealTimeFloodRisk();
-    _initializeWebView();
-  }
-  
-  void _updateFilteredRoutes() {
-    // This method can be used for any route filtering logic if needed
-    // For now, it's just a placeholder
-  }
-
-  void _initializeWebView() async {
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onProgress: (int progress) {
-            // Progress indicator
-          },
-          onPageStarted: (String url) {},
-          onPageFinished: (String url) {},
-        ),
-      );
-    
-    // Load the HTML map
-    await _loadHtmlMap();
-  }
-
-  Future<void> _loadHtmlMap() async {
-    try {
-      final String htmlContent = await rootBundle.loadString('assets/mumbai_evacuation_routes.html');
-      await _webViewController.loadHtmlString(htmlContent);
-    } catch (e) {
-      print('Error loading HTML map: $e');
-    }
-  }
-  
-  // Risk zone colors (matching alit.py)
-  final Map<String, Color> _riskColors = {
-    'low': Color(0xFF1a9850),      // Green
-    'moderate': Color(0xFFfc8d59), // Orange  
-    'high': Color(0xFFd73027),     // Red
-    'unknown': Color(0xFF9e9e9e),  // Gray
-  };
-  
-  // Mumbai flood risk areas data (expanded for better visualization like alit.py)
-  final List<Map<String, dynamic>> _floodRiskAreas = [
-    {'name': 'Andheri East', 'lat': 19.1136, 'lng': 72.8697, 'risk': 'moderate'},
-    {'name': 'Bandra West', 'lat': 19.0596, 'lng': 72.8295, 'risk': 'low'},
-    {'name': 'Kurla East', 'lat': 19.0728, 'lng': 72.8826, 'risk': 'high'},
-    {'name': 'Malad West', 'lat': 19.1864, 'lng': 72.8493, 'risk': 'moderate'},
-    {'name': 'Thane West', 'lat': 19.2183, 'lng': 72.9781, 'risk': 'low'},
-    {'name': 'Borivali East', 'lat': 19.2307, 'lng': 72.8567, 'risk': 'moderate'},
-    {'name': 'Powai', 'lat': 19.1197, 'lng': 72.9089, 'risk': 'high'},
-    {'name': 'Versova', 'lat': 19.1317, 'lng': 72.8122, 'risk': 'moderate'},
-    {'name': 'Juhu', 'lat': 19.1075, 'lng': 72.8263, 'risk': 'low'},
-    {'name': 'Santa Cruz East', 'lat': 19.0825, 'lng': 72.8417, 'risk': 'high'},
-    
-    // Additional risk zones for better coverage
-    {'name': 'Goregaon East', 'lat': 19.1663, 'lng': 72.8526, 'risk': 'moderate'},
-    {'name': 'Kandivali East', 'lat': 19.2081, 'lng': 72.8673, 'risk': 'low'},
-    {'name': 'Mulund West', 'lat': 19.1743, 'lng': 72.9562, 'risk': 'high'},
-    {'name': 'Bhandup West', 'lat': 19.1444, 'lng': 72.9367, 'risk': 'moderate'},
-    {'name': 'Chembur East', 'lat': 19.0627, 'lng': 72.8972, 'risk': 'high'},
-    {'name': 'Ghatkopar West', 'lat': 19.0861, 'lng': 72.9081, 'risk': 'moderate'},
-    {'name': 'Vikhroli East', 'lat': 19.1059, 'lng': 72.9293, 'risk': 'high'},
-    {'name': 'Khar West', 'lat': 19.0716, 'lng': 72.8370, 'risk': 'low'},
-    {'name': 'Worli', 'lat': 19.0177, 'lng': 72.8134, 'risk': 'moderate'},
-    {'name': 'Lower Parel', 'lat': 18.9969, 'lng': 72.8302, 'risk': 'high'},
-    {'name': 'Matunga East', 'lat': 19.0330, 'lng': 72.8570, 'risk': 'low'},
-    {'name': 'Dadar West', 'lat': 19.0178, 'lng': 72.8478, 'risk': 'moderate'},
-    {'name': 'Colaba', 'lat': 18.9067, 'lng': 72.8147, 'risk': 'low'},
-    {'name': 'Fort', 'lat': 18.9338, 'lng': 72.8342, 'risk': 'moderate'},
-    {'name': 'Marine Drive', 'lat': 18.9441, 'lng': 72.8230, 'risk': 'low'},
-  ];
-  
-  // Shelter locations with types
-  final List<Map<String, dynamic>> _shelterLocations = [
-    {'name': 'Phoenix Mall Kurla', 'lat': 19.0895, 'lng': 72.8839, 'type': 'mall', 'capacity': 5000},
-    {'name': 'Andheri Sports Complex', 'lat': 19.1197, 'lng': 72.8489, 'type': 'sports', 'capacity': 3000},
-    {'name': 'Bandra Community Center', 'lat': 19.0544, 'lng': 72.8181, 'type': 'community', 'capacity': 1500},
-    {'name': 'Thane Municipal School', 'lat': 19.2097, 'lng': 72.9694, 'type': 'school', 'capacity': 2000},
-    {'name': 'Malad Convention Hall', 'lat': 19.1956, 'lng': 72.8422, 'type': 'hall', 'capacity': 4000},
-    {'name': 'Borivali Sports Club', 'lat': 19.2411, 'lng': 72.8539, 'type': 'sports', 'capacity': 2500},
-    {'name': 'Versova Community Hall', 'lat': 19.1361, 'lng': 72.8094, 'type': 'community', 'capacity': 1200},
-    {'name': 'Juhu Beach Resort', 'lat': 19.0969, 'lng': 72.8264, 'type': 'hotel', 'capacity': 800},
-  ];
+  String? _iframeViewType;
+  bool _backendConnected = false;
+  String _backendStatus = 'Checking...';
   
   // Individual POI category toggles
   Map<String, bool> _selectedPOICategories = {
@@ -138,7 +45,6 @@ class _RoutePageState extends State<RoutePage> {
     'water_tower': false,
     'bus_station': false,
     'train_station': false,
-    'shelter': true, // Enable shelters by default
   };
   
   // POI Categories matching Streamlit implementation exactly
@@ -156,7 +62,6 @@ class _RoutePageState extends State<RoutePage> {
     'water_tower': {'icon': Icons.water_drop, 'color': Colors.cyan[600]!, 'name': 'Water Tower (4)'},
     'bus_station': {'icon': Icons.directions_bus, 'color': Colors.blue[900]!, 'name': 'Bus Station (26)'},
     'train_station': {'icon': Icons.train, 'color': Colors.grey[700]!, 'name': 'Train Station (42)'},
-    'shelter': {'icon': Icons.home, 'color': Colors.green[600]!, 'name': 'Emergency Shelter (8)'},
   };
   
   // Map style options
@@ -183,248 +88,16 @@ class _RoutePageState extends State<RoutePage> {
     },
   };
 
-  // Sample Mumbai areas for suggestions
+  // Sample Mumbai areas for suggestions - only areas available in backend data
   final List<String> _mumbaiAreas = [
-    'andheri west', 'andheri east', 'bandra', 'colaba', 'dadar', 'powai',
-    'malad', 'borivali', 'thane', 'kurla', 'santa cruz', 'jogeshwari',
-    'goregaon', 'kandivali', 'mulund', 'bhandup', 'chembur', 'ghatkopar',
-    'vikhroli', 'khar', 'juhu', 'versova', 'worli', 'lower parel',
-    'matunga', 'king circle', 'sion', 'mahim', 'mumbai central'
+    'andheri east', 'fort', 'mahim', 'mulund', 'khar west', 'borivali', 
+    'chembur', 'goregaon', 'dahisar', 'kandivali', 'worli', 'prabhadevi',
+    'matunga', 'wadala', 'sewri', 'byculla', 'bhuleshwar', 'dharavi',
+    'santacruz west', 'vile parle west', 'marve', 'kanjurmarg', 'bhandup'
   ];
 
-  // Real road network waypoints for Mumbai (major intersections and turns)
-  final Map<String, List<LatLng>> _roadWaypoints = {
-    'andheri west': [
-      LatLng(19.1136, 72.8697), // Start
-      LatLng(19.1100, 72.8650), // Andheri Station
-      LatLng(19.1050, 72.8600), // MIDC
-      LatLng(19.1000, 72.8550), // Chakala
-      LatLng(19.0950, 72.8500), // Marol
-      LatLng(19.0900, 72.8450), // Saki Naka
-    ],
-    'bandra': [
-      LatLng(19.0596, 72.8295), // Start
-      LatLng(19.0650, 72.8350), // Bandra Station
-      LatLng(19.0700, 72.8400), // Khar
-      LatLng(19.0750, 72.8450), // Santacruz
-      LatLng(19.0800, 72.8500), // Vile Parle
-    ],
-    'dadar': [
-      LatLng(19.0178, 72.8478), // Start
-      LatLng(19.0200, 72.8500), // Dadar Station
-      LatLng(19.0250, 72.8520), // Matunga
-      LatLng(19.0300, 72.8540), // Sion
-      LatLng(19.0350, 72.8560), // Kurla
-    ],
-    'colaba': [
-      LatLng(18.9067, 72.8147), // Start
-      LatLng(18.9100, 72.8150), // Gateway
-      LatLng(18.9150, 72.8200), // Fort
-      LatLng(18.9200, 72.8250), // Marine Lines
-      LatLng(18.9250, 72.8300), // Grant Road
-    ],
-  };
-
-  // Function to get road-aligned route points using real waypoints
-  List<LatLng> _getRoadAlignedRoute(LatLng start, LatLng end, String routeType) {
-    List<LatLng> routePoints = [start];
-    
-    // Find the closest waypoint sequences for start and end
-    String? startArea = _findClosestArea(start);
-    String? endArea = _findClosestArea(end);
-    
-    if (startArea != null && endArea != null) {
-      List<LatLng> startWaypoints = _roadWaypoints[startArea] ?? [];
-      List<LatLng> endWaypoints = _roadWaypoints[endArea] ?? [];
-      
-      if (startWaypoints.isNotEmpty && endWaypoints.isNotEmpty) {
-        // Add intermediate waypoints that follow actual roads
-        for (int i = 1; i < startWaypoints.length; i++) {
-          if (_isPointBetween(start, end, startWaypoints[i])) {
-            routePoints.add(startWaypoints[i]);
-          }
-        }
-        
-        // Add end waypoints in reverse order
-        for (int i = endWaypoints.length - 2; i >= 0; i--) {
-          if (_isPointBetween(start, end, endWaypoints[i])) {
-            routePoints.add(endWaypoints[i]);
-          }
-        }
-      }
-    }
-    
-    // Add some realistic road curves and turns
-    routePoints = _addRoadCurves(routePoints);
-    
-    routePoints.add(end);
-    return routePoints;
-  }
-
-  // Helper function to find closest area to a coordinate
-  String? _findClosestArea(LatLng point) {
-    double minDistance = double.infinity;
-    String? closestArea;
-    
-    for (MapEntry<String, LatLng> entry in _areaCoordinates.entries) {
-      double distance = _calculateDistance(point, entry.value);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestArea = entry.key;
-      }
-    }
-    
-    return closestArea;
-  }
-
-  // Helper function to check if a point is between start and end
-  bool _isPointBetween(LatLng start, LatLng end, LatLng point) {
-    double startToEnd = _calculateDistance(start, end);
-    double startToPoint = _calculateDistance(start, point);
-    double pointToEnd = _calculateDistance(point, end);
-    
-    // Allow some tolerance for waypoints that are roughly on the route
-    return (startToPoint + pointToEnd) <= startToEnd * 1.5;
-  }
-
-  // Add realistic road curves and turns
-  List<LatLng> _addRoadCurves(List<LatLng> points) {
-    if (points.length < 3) return points;
-    
-    List<LatLng> curvedPoints = [points.first];
-    
-    for (int i = 1; i < points.length - 1; i++) {
-      LatLng prev = points[i - 1];
-      LatLng current = points[i];
-      LatLng next = points[i + 1];
-      
-      // Add curve around current point
-      double angle = _calculateAngle(prev, current, next);
-      
-      if (angle.abs() > 30) { // If there's a significant turn
-        // Add intermediate points to create a curve
-        int numCurvePoints = 3;
-        for (int j = 1; j <= numCurvePoints; j++) {
-          double ratio = j / (numCurvePoints + 1);
-          double lat = prev.latitude + (current.latitude - prev.latitude) * ratio;
-          double lng = prev.longitude + (current.longitude - prev.longitude) * ratio;
-          
-          // Add some offset to create a curve
-          double offset = 0.001 * sin(ratio * pi);
-          curvedPoints.add(LatLng(lat + offset, lng + offset));
-        }
-      }
-      
-      curvedPoints.add(current);
-    }
-    
-    curvedPoints.add(points.last);
-    return curvedPoints;
-  }
-
-  // Calculate angle between three points
-  double _calculateAngle(LatLng p1, LatLng p2, LatLng p3) {
-    double a = _calculateDistance(p1, p2);
-    double b = _calculateDistance(p2, p3);
-    double c = _calculateDistance(p1, p3);
-    
-    if (a == 0 || b == 0) return 0;
-    
-    double cosAngle = (a * a + b * b - c * c) / (2 * a * b);
-    cosAngle = cosAngle.clamp(-1.0, 1.0);
-    
-    return acos(cosAngle) * 180 / pi;
-  }
-
-  // Calculate distance between two points in km
-  double _calculateDistance(LatLng p1, LatLng p2) {
-    const double earthRadius = 6371; // Earth's radius in km
-    
-    double lat1 = p1.latitude * pi / 180;
-    double lat2 = p2.latitude * pi / 180;
-    double deltaLat = (p2.latitude - p1.latitude) * pi / 180;
-    double deltaLng = (p2.longitude - p1.longitude) * pi / 180;
-    
-    double a = sin(deltaLat / 2) * sin(deltaLat / 2) +
-        cos(lat1) * cos(lat2) * sin(deltaLng / 2) * sin(deltaLng / 2);
-    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    
-    return earthRadius * c;
-  }
-
-  // Fetch real route from OpenRouteService API
-  Future<List<LatLng>> _fetchRealRoute(LatLng start, LatLng end) async {
-    try {
-      // Use OpenRouteService API for real routing
-      String apiKey = '5b3ce3597851110001cf6248d4c0e6f8fd4b415382a1e1f6c5b3a8f7'; // Free API key
-      String url = 'https://api.openrouteservice.org/v2/directions/driving-car';
-      
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Authorization': apiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
-        },
-        body: jsonEncode({
-          'coordinates': [
-            [start.longitude, start.latitude],
-            [end.longitude, end.latitude]
-          ],
-          'format': 'geojson',
-          'instructions': false,
-          'preference': 'fastest',
-          'units': 'km'
-        }),
-      ).timeout(Duration(seconds: 15));
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['features'] != null && data['features'].isNotEmpty) {
-          final coordinates = data['features'][0]['geometry']['coordinates'] as List;
-          List<LatLng> routePoints = coordinates.map((coord) {
-            return LatLng(coord[1].toDouble(), coord[0].toDouble());
-          }).toList();
-          
-          print('✅ Got real route with ${routePoints.length} points');
-          return routePoints;
-        }
-      }
-    } catch (e) {
-      print('❌ OpenRouteService failed: $e');
-    }
-    
-    // Fallback to OSRM (Open Source Routing Machine)
-    try {
-      String osrmUrl = 'https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&overview=full';
-      
-      final response = await http.get(
-        Uri.parse(osrmUrl),
-        headers: {'User-Agent': 'FloodApp/1.0'},
-      ).timeout(Duration(seconds: 10));
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['routes'] != null && data['routes'].isNotEmpty) {
-          final coordinates = data['routes'][0]['geometry']['coordinates'] as List;
-          List<LatLng> routePoints = coordinates.map((coord) {
-            return LatLng(coord[1].toDouble(), coord[0].toDouble());
-          }).toList();
-          
-          print('✅ Got OSRM route with ${routePoints.length} points');
-          return routePoints;
-        }
-      }
-    } catch (e) {
-      print('❌ OSRM also failed: $e');
-    }
-    
-    // Ultimate fallback - use road waypoints
-    return _getRoadAlignedRoute(start, end, 'evacuation');
-  }
-
-  // Enhanced flood risk data with real-time updates
-  Map<String, String> _floodRiskData = {
+  // Sample flood risk data
+  final Map<String, String> _floodRiskData = {
     'andheri west': 'moderate',
     'andheri east': 'high',
     'bandra': 'low',
@@ -455,23 +128,6 @@ class _RoutePageState extends State<RoutePage> {
     'mahim': 'moderate',
     'mumbai central': 'moderate',
   };
-
-  // Fetch real-time flood risk data
-  Future<void> _fetchRealTimeFloodRisk() async {
-    try {
-      // Simulate real-time data fetch (replace with actual API)
-      await Future.delayed(Duration(seconds: 1));
-      
-      // Update risk levels based on current conditions
-      setState(() {
-        _floodRiskData['andheri east'] = Random().nextBool() ? 'high' : 'very_high';
-        _floodRiskData['kurla'] = Random().nextBool() ? 'high' : 'very_high';
-        _floodRiskData['chembur'] = Random().nextBool() ? 'high' : 'very_high';
-      });
-    } catch (e) {
-      print('Failed to fetch real-time flood risk: $e');
-    }
-  }
 
   // Mumbai area coordinates mapping
   final Map<String, LatLng> _areaCoordinates = {
@@ -505,8 +161,6 @@ class _RoutePageState extends State<RoutePage> {
     'mahim': LatLng(19.0410, 72.8420),
     'mumbai central': LatLng(18.9685, 72.8205),
   };
-
-
   
   // Sample POI data for Mumbai areas - matching Streamlit categories
   List<Map<String, dynamic>> _getPOIMarkers() {
@@ -591,14 +245,13 @@ class _RoutePageState extends State<RoutePage> {
       {'type': 'train_station', 'name': 'Dadar Railway Station', 'coord': LatLng(19.0178, 72.8478)},
       {'type': 'train_station', 'name': 'Borivali Railway Station', 'coord': LatLng(19.2307, 72.8567)},
       {'type': 'train_station', 'name': 'Thane Railway Station', 'coord': LatLng(19.2183, 72.9781)},
-      
-      // Emergency Shelters (8) - Added from _shelterLocations
-      ...(_shelterLocations.map((shelter) => {
-        'type': 'shelter',
-        'name': '${shelter['name']} (${shelter['capacity']} capacity)',
-        'coord': LatLng(shelter['lat'], shelter['lng']),
-      }).toList()),
     ];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBackendConnection();
   }
 
   @override
@@ -607,75 +260,153 @@ class _RoutePageState extends State<RoutePage> {
     super.dispose();
   }
 
-  // Enhanced route finding with real-time data
+  // Check backend connectivity
+  Future<void> _checkBackendConnection() async {
+    try {
+      final healthCheck = await BackendApiService.healthCheck();
+      setState(() {
+        _backendConnected = true;
+        _backendStatus = 'Connected to Hugging Face Backend';
+      });
+    } catch (e) {
+      setState(() {
+        _backendConnected = false;
+        _backendStatus = 'Backend Unavailable: ${e.toString()}';
+      });
+    }
+  }
+
+  // Find evacuation routes using backend API
   Future<void> _findRoutes() async {
     if (_locationController.text.trim().isEmpty) return;
 
     setState(() {
       _isLoading = true;
       _routes.clear();
-      _routePoints.clear(); // Clear stored route points
     });
 
-    // Fetch real-time data
-    await _fetchRealTimeFloodRisk();
-
-    // Find best match using fuzzy matching simulation
-    String query = _locationController.text.trim().toLowerCase();
-    String? bestMatch;
-    int bestScore = 0;
-
-    for (String area in _mumbaiAreas) {
-      int score = _calculateSimilarity(query, area);
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = area;
-      }
-    }
-
-    if (bestMatch != null && bestScore >= 50) {
-      _matchedLocation = bestMatch;
-      _matchScore = bestScore;
-
-      // Generate sample routes to low-risk areas
-      List<String> lowRiskAreas = _floodRiskData.entries
-          .where((entry) => entry.value == 'low')
-          .map((entry) => entry.key)
-          .where((area) => area != bestMatch)
-          .toList();
-
-      lowRiskAreas.shuffle();
+    try {
+      String query = _locationController.text.trim();
       
-                   // Generate routes with real routing data
-      List<Future<EvacuationRoute>> routeFutures = [];
-      
-      for (int i = 0; i < min(_numRoutes, lowRiskAreas.length); i++) {
-        String destination = lowRiskAreas[i];
-        LatLng startCoord = _areaCoordinates[bestMatch]!;
-        LatLng endCoord = _areaCoordinates[destination]!;
+      // Call backend API to get evacuation routes
+      final response = await BackendApiService.getEvacuationRoutes(
+        region: query,
+        routeCount: _numRoutes,
+      );
+
+        if (response['success'] == true) {
+        _matchedLocation = response['matched_region'] ?? query;
+        _matchScore = response['match_score'] ?? 100;
         
-        routeFutures.add(_generateRouteWithRealDistance(
-          i + 1,
-          destination,
-          startCoord,
-          endCoord,
-          _getRouteColor(i),
-        ));
-      }
-      
-      // Wait for all routes to be generated
-      List<EvacuationRoute> generatedRoutes = await Future.wait(routeFutures);
-      _routes.addAll(generatedRoutes);
+        // Show data source information
+        String dataSource = response['data_source'] ?? 'Unknown';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(
+                    dataSource.contains('llload.py') ? Icons.auto_awesome : Icons.storage,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Data Source: $dataSource',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: dataSource.contains('llload.py') ? Colors.green : Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
 
-      _routes.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
-    } else {
+        // Parse routes from API response
+        List<dynamic> routesData = response['routes'] ?? [];
+        _routes.clear();
+
+        for (int i = 0; i < routesData.length; i++) {
+          var routeData = routesData[i];
+          _routes.add(EvacuationRoute(
+            id: i + 1,
+            destination: routeData['destination'] ?? 'Unknown',
+            distanceKm: (routeData['distance_km'] ?? 0.0).toDouble(),
+            estimatedTimeMinutes: _parseTimeMinutes(routeData['eta'] ?? '0 min'),
+            riskLevel: routeData['risk_level'] ?? 'unknown',
+            routeColor: _getRouteColor(i),
+          ));
+        }
+
+        _routes.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
+      } else {
+        _matchedLocation = null;
+        _matchScore = 0;
+        
+        // Show error message with suggestions
+        String errorMessage = response['error'] ?? 'Failed to find routes';
+        String suggestions = response['message'] ?? '';
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    errorMessage,
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  if (suggestions.isNotEmpty) ...[
+                    SizedBox(height: 4),
+                    Text(
+                      suggestions,
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
       _matchedLocation = null;
       _matchScore = 0;
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
 
     setState(() {
       _isLoading = false;
     });
+  }
+
+  // Helper function to parse time from string like "15.5 min" to minutes
+  double _parseTimeMinutes(String timeStr) {
+    try {
+      RegExp regex = RegExp(r'(\d+\.?\d*)\s*min');
+      Match? match = regex.firstMatch(timeStr);
+      if (match != null) {
+        return double.parse(match.group(1)!);
+      }
+      return 0.0;
+    } catch (e) {
+      return 0.0;
+    }
   }
 
   int _calculateSimilarity(String query, String target) {
@@ -699,25 +430,14 @@ class _RoutePageState extends State<RoutePage> {
   }
 
   Color _getRouteColor(int index) {
-    // Risk-based route coloring (like alit.py)
-    // Routes to low-risk areas = green, moderate = orange, high = red
-    const safeColors = [
-      Color(0xFF1a9850), // Green (safe route)
-      Color(0xFF2ecc71), // Light green
-      Color(0xFF27ae60), // Medium green
+    const colors = [
+      Color(0xFF0078FF), // Blue
+      Color(0xFF1ABC9C), // Green
+      Color(0xFFF39C12), // Orange
+      Color(0xFFC0392B), // Red
+      Color(0xFF8E44AD), // Purple
     ];
-    
-    const moderateColors = [
-      Color(0xFFfc8d59), // Orange (moderate risk)
-      Color(0xFFf39c12), // Light orange
-    ];
-    
-    // Most routes should be safe (green) since we prioritize low-risk destinations
-    if (index < 3) {
-      return safeColors[index % safeColors.length];
-    } else {
-      return moderateColors[index % moderateColors.length];
-    }
+    return colors[index % colors.length];
   }
 
   Color _getRiskColor(String risk) {
@@ -734,55 +454,29 @@ class _RoutePageState extends State<RoutePage> {
   }
 
   // Generate route points between two coordinates
-  Future<List<LatLng>> _generateRoutePoints(LatLng start, LatLng end) async {
-    // Try to get real route from routing APIs first
-    List<LatLng> realRoute = await _fetchRealRoute(start, end);
+  List<LatLng> _generateRoutePoints(LatLng start, LatLng end) {
+    List<LatLng> points = [start];
     
-    if (realRoute.isNotEmpty && realRoute.length > 2) {
-      return realRoute;
+    // Add intermediate points to simulate a more realistic route
+    double latDiff = end.latitude - start.latitude;
+    double lngDiff = end.longitude - start.longitude;
+    
+    // Add 2-4 intermediate waypoints
+    int numPoints = Random().nextInt(3) + 2;
+    
+    for (int i = 1; i < numPoints; i++) {
+      double ratio = i / numPoints;
+      // Add some randomness to make the route look more realistic
+      double randomOffset = (Random().nextDouble() - 0.5) * 0.01;
+      
+      double lat = start.latitude + (latDiff * ratio) + randomOffset;
+      double lng = start.longitude + (lngDiff * ratio) + randomOffset;
+      
+      points.add(LatLng(lat, lng));
     }
     
-    // Fallback to road-aligned route
-    return _getRoadAlignedRoute(start, end, 'evacuation');
-  }
-
-  // Generate a single route with real distance calculation
-  Future<EvacuationRoute> _generateRouteWithRealDistance(
-    int id,
-    String destination,
-    LatLng startCoord,
-    LatLng endCoord,
-    Color routeColor,
-  ) async {
-    // Get real route points
-    List<LatLng> routePoints = await _generateRoutePoints(startCoord, endCoord);
-    
-    // Store route points for map display
-    _routePoints[id] = routePoints;
-    
-    // Calculate real distance by following the route
-    double realDistance = 0.0;
-    for (int i = 0; i < routePoints.length - 1; i++) {
-      realDistance += _calculateDistance(routePoints[i], routePoints[i + 1]);
-    }
-    
-    // If route is too short, use direct distance
-    if (realDistance < 1.0) {
-      realDistance = _calculateDistance(startCoord, endCoord);
-    }
-    
-    double timeMinutes = (realDistance / _speedKmph) * 60;
-    
-    print('🛣️ Route $id to $destination: ${realDistance.toStringAsFixed(2)}km via ${routePoints.length} points');
-    
-    return EvacuationRoute(
-      id: id,
-      destination: destination,
-      distanceKm: realDistance,
-      estimatedTimeMinutes: timeMinutes,
-      riskLevel: 'low',
-      routeColor: routeColor,
-    );
+    points.add(end);
+    return points;
   }
 
   // Build risk level legend item
@@ -829,6 +523,54 @@ class _RoutePageState extends State<RoutePage> {
                 ),
               ),
             ),
+
+            // Backend Status Indicator
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _backendConnected ? Colors.green[50] : Colors.red[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _backendConnected ? Colors.green : Colors.red,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _backendConnected ? Icons.check_circle : Icons.error,
+                      color: _backendConnected ? Colors.green : Colors.red,
+                      size: 20,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _backendStatus,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: _backendConnected ? Colors.green[800] : Colors.red[800],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    if (!_backendConnected)
+                      TextButton(
+                        onPressed: _checkBackendConnection,
+                        child: Text(
+                          'Retry',
+                          style: GoogleFonts.poppins(
+                            color: Colors.red[800],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 16),
 
             // Quick Stats Cards
             Padding(
@@ -1374,7 +1116,7 @@ class _RoutePageState extends State<RoutePage> {
                           Icon(Icons.map, color: Color(0xFF22223B), size: 24),
                           SizedBox(width: 12),
                           Text(
-                            'Interactive Evacuation Map',
+                            'Evacuation Map (Web)',
                             style: GoogleFonts.poppins(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
@@ -1384,647 +1126,143 @@ class _RoutePageState extends State<RoutePage> {
                         ],
                       ),
                       SizedBox(height: 16),
-                      
-                      // Map Controls Section
-                      Container(
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
-                              blurRadius: 5,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.tune, color: Color(0xFF22223B), size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Map Controls',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF22223B),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 12),
-                            
-                            // Map Style Selection
-                            Text(
-                              'Map Style',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF22223B),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _locationController,
+                              decoration: InputDecoration(
+                                hintText: "Enter region name",
+                                border: const OutlineInputBorder(),
+                                // errorText: _errorText, // Uncomment if you want error handling
                               ),
                             ),
-                            SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _mapStyles.entries.map((style) => GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedMapStyle = style.key;
-                                  });
-                                },
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: _selectedMapStyle == style.key 
-                                        ? Color(0xFFB5C7F7)
-                                        : Color(0xFFB5C7F7).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: _selectedMapStyle == style.key 
-                                          ? Color(0xFFB5C7F7)
-                                          : Color(0xFFB5C7F7).withOpacity(0.5),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    style.value['name']!,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: _selectedMapStyle == style.key 
-                                          ? Colors.white 
-                                          : Color(0xFF22223B),
-                                    ),
-                                  ),
-                                ),
-                              )).toList(),
-                            ),
-                            
-                            SizedBox(height: 16),
-                            
-                            // Risk Zone Visualization Toggle
-                            Row(
-                              children: [
-                                Icon(Icons.warning, color: Color(0xFF22223B), size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Roads (risk-colored, sampled)',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF22223B),
-                                  ),
-                                ),
-                                Spacer(),
-                                Switch(
-                                  value: _showRoadRisk,
-                                  onChanged: (bool value) {
-                                    setState(() {
-                                      _showRoadRisk = value;
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _isLoading ? null : () async {
+                              final region = _locationController.text.trim();
+                              if (region.isEmpty) {
+                                setState(() {
+                                  // _errorText = "Please enter a region name."; // Uncomment if you want error handling
+                                });
+                                return;
+                              }
+                              setState(() {
+                                // _errorText = null;
+                                _isLoading = true;
+                              });
+                              // Use backend API to get evacuation map
+                              try {
+                                final mapHtml = await BackendApiService.getEvacuationMap(region);
+                                final viewType = "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
+                                // ignore: undefined_prefixed_name
+                                ui_web.platformViewRegistry.registerViewFactory(
+                                  viewType,
+                                  (int viewId) {
+                                    final iframe = html.IFrameElement()
+                                      ..srcdoc = mapHtml
+                                      ..style.border = 'none'
+                                      ..width = '100%'
+                                      ..height = '600';
+                                    iframe.onLoad.listen((event) {
+                                      setState(() {
+                                        _isLoading = false;
+                                      });
                                     });
-                                  },
-                                  activeColor: Color(0xFFB5C7F7),
-                                ),
-                              ],
-                            ),
-                            
-                            SizedBox(height: 16),
-                            
-                            // HTML Map Toggle
-                            Row(
-                              children: [
-                                Icon(Icons.web, color: Color(0xFF22223B), size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Use HTML Map (exact alit.py)',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF22223B),
-                                  ),
-                                ),
-                                Spacer(),
-                                Switch(
-                                  value: _useHtmlMap,
-                                  onChanged: (bool value) {
-                                    setState(() {
-                                      _useHtmlMap = value;
+                                    iframe.onError.listen((event) {
+                                      setState(() {
+                                        _isLoading = false;
+                                      });
                                     });
+                                    return iframe;
                                   },
-                                  activeColor: Color(0xFFB5C7F7),
-                                ),
-                              ],
-                            ),
-                            
-                            SizedBox(height: 16),
-                            
-                            // POI Categories Selection
-                            Row(
-                              children: [
-                                Icon(Icons.location_pin, color: Color(0xFF22223B), size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Points of Interest',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Color(0xFF22223B),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 12),
-                            
-                            // Individual POI Category Checkboxes
-                            Column(
-                              children: _poiCategories.entries.map((category) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Row(
-                                    children: [
-                                      Checkbox(
-                                        value: _selectedPOICategories[category.key] ?? false,
-                                        onChanged: (bool? value) {
-                                          setState(() {
-                                            _selectedPOICategories[category.key] = value ?? false;
-                                            // Update master toggle
-                                            _showPOIs = _selectedPOICategories.values.any((selected) => selected);
-                                          });
-                                        },
-                                        activeColor: Color(0xFFB5C7F7),
-                                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      SizedBox(width: 8),
-                                      Icon(
-                                        category.value['icon'],
-                                        size: 16,
-                                        color: category.value['color'],
-                                      ),
-                                      SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          category.value['name'],
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                            color: Color(0xFF22223B),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
+                                );
+                                setState(() {
+                                  _iframeViewType = viewType;
+                                });
+                              } catch (e) {
+                                setState(() {
+                                  _isLoading = false;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error loading map: ${e.toString()}'),
+                                    backgroundColor: Colors.red,
                                   ),
                                 );
-                              }).toList(),
-                            ),
-                            
-                            // Select All / Deselect All buttons
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                TextButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      for (String key in _selectedPOICategories.keys) {
-                                        _selectedPOICategories[key] = true;
-                                      }
-                                      _showPOIs = true;
-                                    });
-                                  },
-                                  child: Text(
-                                    'Select All',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: Color(0xFFB5C7F7),
-                                    ),
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      for (String key in _selectedPOICategories.keys) {
-                                        _selectedPOICategories[key] = false;
-                                      }
-                                      _showPOIs = false;
-                                    });
-                                  },
-                                  child: Text(
-                                    'Clear All',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey[600]!,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                              }
+                            },
+                            child: _isLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Text("Show Map"),
+                          ),
+                        ],
                       ),
-                      
                       SizedBox(height: 16),
-                      
                       Container(
                         height: 500,
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
-                              blurRadius: 10,
-                              offset: Offset(0, 5),
-                            ),
-                          ],
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(20),
-                          child: _useHtmlMap ? WebViewWidget(controller: _webViewController) : FlutterMap(
-                            mapController: _mapController,
-                            options: MapOptions(
-                              initialCenter: _areaCoordinates[_matchedLocation!] ?? LatLng(19.0760, 72.8777),
-                              initialZoom: 12.0,
-                              maxZoom: 18.0,
-                              minZoom: 10.0,
-                            ),
-                            children: [
-                              // Base Map Layer
-                              TileLayer(
-                                urlTemplate: _mapStyles[_selectedMapStyle]!['url']!,
-                                userAgentPackageName: 'com.example.flood',
-                                subdomains: _selectedMapStyle.contains('CartoDB') ? ['a', 'b', 'c', 'd'] : ['a', 'b', 'c'],
-                              ),
-                              
-                              // GeoJSON Road Network with Risk Coloring (like alit.py)
-                              GeoJsonRoadLayer(
-                                showRoadRisk: _showRoadRisk,
-                                riskColors: _riskColors,
-                              ),
-                              
-                              // Real Road-Following Route Polylines
-                              if (_routes.isNotEmpty)
-                                PolylineLayer(
-                                  polylines: _routes.map((route) {
-                                    // Use stored real route points
-                                    List<LatLng> routePoints = _routePoints[route.id] ?? [];
-                                    
-                                    // Fallback if no stored points
-                                    if (routePoints.isEmpty) {
-                                    LatLng startCoord = _areaCoordinates[_matchedLocation!]!;
-                                    LatLng endCoord = _areaCoordinates[route.destination]!;
-                                      routePoints = [startCoord, endCoord];
-                                    }
-                                    
-                                    return Polyline(
-                                      points: routePoints,
-                                      strokeWidth: 6.0, // Even thicker for visibility
-                                      color: route.routeColor,
-                                      borderStrokeWidth: 2.0,
-                                      borderColor: Colors.white.withOpacity(0.8),
-                                    );
-                                  }).toList(),
-                                ),
-                              
-                              // Markers Layer
-                              MarkerLayer(
-                                markers: [
-                                  // Start location marker
-                                  Marker(
-                                    point: _areaCoordinates[_matchedLocation!]!,
-                                    width: 80,
-                                    height: 80,
-                                    child: Container(
+                        child: _iframeViewType != null
+                            ? Stack(
+                                children: [
+                                  HtmlElementView(viewType: _iframeViewType!),
+                                  if (_isLoading)
+                                    const Center(
                                       child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
-                                          Container(
-                                            padding: EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: _getRiskColor(_floodRiskData[_matchedLocation!] ?? 'unknown'),
-                                              borderRadius: BorderRadius.circular(20),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black.withOpacity(0.3),
-                                                  blurRadius: 4,
-                                                  offset: Offset(0, 2),
-                                                ),
-                                              ],
-                                            ),
-                                            child: Icon(
-                                              Icons.home,
-                                              color: Colors.white,
-                                              size: 20,
-                                            ),
-                                          ),
-                                          SizedBox(height: 4),
-                                          Container(
-                                            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(10),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black.withOpacity(0.2),
-                                                  blurRadius: 2,
-                                                  offset: Offset(0, 1),
-                                                ),
-                                              ],
-                                            ),
-                                            child: Text(
-                                              'START',
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xFF22223B),
-                                              ),
-                                            ),
-                                          ),
+                                          CircularProgressIndicator(),
+                                          SizedBox(height: 16),
+                                          Text('Loading evacuation map...'),
                                         ],
                                       ),
                                     ),
-                                  ),
-                                  
-                                  // Destination markers
-                                  ...List.generate(_routes.length, (index) {
-                                    final route = _routes[index];
-                                    return Marker(
-                                      point: _areaCoordinates[route.destination]!,
-                                      width: 80,
-                                      height: 80,
-                                      child: Container(
-                                        child: Column(
-                                          children: [
-                                            Container(
-                                              padding: EdgeInsets.all(8),
-                                              decoration: BoxDecoration(
-                                                color: route.routeColor,
-                                                borderRadius: BorderRadius.circular(20),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black.withOpacity(0.3),
-                                                    blurRadius: 4,
-                                                    offset: Offset(0, 2),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Text(
-                                                '${route.id}',
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                            ),
-                                            SizedBox(height: 4),
-                                            Container(
-                                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius: BorderRadius.circular(8),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black.withOpacity(0.2),
-                                                    blurRadius: 2,
-                                                    offset: Offset(0, 1),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Text(
-                                                '${route.distanceKm.toStringAsFixed(1)}km',
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 9,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: Color(0xFF22223B),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                  
-                                  // Route Label Markers (hover info)
-                                  ...List.generate(_routes.length, (index) {
-                                    final route = _routes[index];
-                                    List<LatLng> routePoints = _routePoints[route.id] ?? [];
-                                    
-                                    if (routePoints.isNotEmpty && routePoints.length > 1) {
-                                      // Get midpoint of route for label placement
-                                      int midIndex = routePoints.length ~/ 2;
-                                      LatLng midPoint = routePoints[midIndex];
-                                      
-                                      return Marker(
-                                        point: midPoint,
-                                        width: 120,
-                                        height: 40,
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: route.routeColor.withOpacity(0.9),
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(color: Colors.white, width: 2),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: Colors.black.withOpacity(0.3),
-                                                blurRadius: 4,
-                                                offset: Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Text(
-                                            '${route.destination.toUpperCase()}\n${route.distanceKm.toStringAsFixed(1)}km • ${route.estimatedTimeMinutes.toStringAsFixed(0)}min',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 8,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white,
-                                              height: 1.1,
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                    return null;
-                                  }).where((marker) => marker != null).cast<Marker>().toList(),
-                                  
-                                  // POI Markers (filtered by selected categories)
-                                  if (_showPOIs) ..._getPOIMarkers().where((poi) {
-                                    final poiType = poi['type'] as String;
-                                    return _selectedPOICategories[poiType] == true;
-                                  }).map((poi) {
-                                    final poiType = poi['type'] as String;
-                                    final poiName = poi['name'] as String;
-                                    final poiCoord = poi['coord'] as LatLng;
-                                    final category = _poiCategories[poiType]!;
-                                    
-                                    return Marker(
-                                      point: poiCoord,
-                                      width: 40,
-                                      height: 40,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: category['color'],
-                                          borderRadius: BorderRadius.circular(15),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(0.2),
-                                              blurRadius: 3,
-                                              offset: Offset(0, 2),
-                                            ),
-                                          ],
-                                        ),
-                                        child: Icon(
-                                          category['icon'],
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
                                 ],
+                              )
+                            : Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[50],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.map_outlined,
+                                        size: 64,
+                                        color: Colors.grey,
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        "Enter a region name and click 'Show Map'",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.grey,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        "to load evacuation routes from Hugging Face backend",
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 16),
-                      
-                                             // Enhanced Map Legend with real-time indicators
-                      Container(
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
-                              blurRadius: 5,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                             Row(
-                               children: [
-                                 Icon(Icons.update, color: Color(0xFFB5C7F7)),
-                                 SizedBox(width: 8),
-                            Text(
-                                   'Real-time Map Legend',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF22223B),
-                              ),
-                                 ),
-                               ],
-                            ),
-                            SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    color: _getRiskColor(_floodRiskData[_matchedLocation!] ?? 'unknown'),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(Icons.home, color: Colors.white, size: 12),
-                                ),
-                                SizedBox(width: 8),
-                                Text('Your Location', style: GoogleFonts.poppins(fontSize: 14)),
-                                SizedBox(width: 24),
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFF1a9850),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Center(
-                                    child: Text('1', style: GoogleFonts.poppins(fontSize: 12, color: Colors.white, fontWeight: FontWeight.bold)),
-                                  ),
-                                ),
-                                SizedBox(width: 8),
-                                Text('Safe Destinations', style: GoogleFonts.poppins(fontSize: 14)),
-                              ],
-                            ),
-                            SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 30,
-                                  height: 4,
-                                  color: Color(0xFF0078FF),
-                                ),
-                                SizedBox(width: 8),
-                                Text('Evacuation Routes', style: GoogleFonts.poppins(fontSize: 14)),
-                                SizedBox(width: 24),
-                                Text(
-                                  'Risk Levels:',
-                                  style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
-                                ),
-                                SizedBox(width: 8),
-                                _buildRiskLegend('LOW', Color(0xFF1a9850)),
-                                SizedBox(width: 4),
-                                _buildRiskLegend('MOD', Color(0xFFfc8d59)),
-                                SizedBox(width: 4),
-                                _buildRiskLegend('HIGH', Color(0xFFd73027)),
-                              ],
-                            ),
-                            SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    color: Colors.green[600],
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(Icons.home, color: Colors.white, size: 12),
-                                ),
-                                SizedBox(width: 8),
-                                Text('Emergency Shelters', style: GoogleFonts.poppins(fontSize: 14)),
-                                SizedBox(width: 20),
-                                if (_showRoadRisk) ...[
-                                  Container(
-                                    width: 20,
-                                    height: 20,
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFFd73027).withOpacity(0.3),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: Color(0xFFd73027), width: 1),
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text('Risk Zones', style: GoogleFonts.poppins(fontSize: 14)),
-                                ],
-                              ],
-                            ),
-                             SizedBox(height: 8),
-                             Row(
-                               children: [
-                                 Icon(Icons.wifi, color: Colors.green, size: 16),
-                                 SizedBox(width: 8),
-                                 Text(
-                                   'Real road routes from OpenStreetMap & OSRM',
-                                   style: GoogleFonts.poppins(
-                                     fontSize: 12,
-                                     color: Colors.green[700],
-                                     fontStyle: FontStyle.italic,
-                                   ),
-                                 ),
-                               ],
-                            ),
-                          ],
-                        ),
                       ),
                     ],
                   ),
@@ -2276,6 +1514,142 @@ class _PastelChip extends StatelessWidget {
       label: Text(label, style: TextStyle(color: Color(0xFF22223B))),
       backgroundColor: color,
       shape: StadiumBorder(),
+    );
+  }
+}
+
+class RouteMapPage extends StatefulWidget {
+  const RouteMapPage({super.key});
+
+  @override
+  State<RouteMapPage> createState() => _RouteMapPageState();
+}
+
+class _RouteMapPageState extends State<RouteMapPage> {
+  final TextEditingController _regionController = TextEditingController();
+  String? _iframeViewType;
+  bool _isLoading = false;
+  String? _errorText;
+
+  void _loadMap() async {
+    final region = _regionController.text.trim();
+    if (region.isEmpty) {
+      setState(() {
+        _errorText = "Please enter a region name.";
+      });
+      return;
+    }
+    setState(() {
+      _errorText = null;
+      _isLoading = true;
+    });
+
+    try {
+      // Use backend API to get evacuation map
+      final htmlContent = await BackendApiService.getEvacuationMap(region);
+      
+      final viewType = "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
+      // ignore: undefined_prefixed_name
+      ui_web.platformViewRegistry.registerViewFactory(
+        viewType,
+        (int viewId) {
+          final iframe = html.IFrameElement()
+            ..srcdoc = htmlContent  // Use srcdoc instead of src for HTML content
+            ..style.border = 'none'
+            ..width = '100%'
+            ..height = '600';
+          iframe.onLoad.listen((event) {
+            setState(() {
+              _isLoading = false;
+            });
+          });
+          iframe.onError.listen((event) {
+            setState(() {
+              _isLoading = false;
+              _errorText = "Failed to load map. Please check the region name.";
+            });
+          });
+          return iframe;
+        },
+      );
+      setState(() {
+        _iframeViewType = viewType;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorText = "Error loading map: ${e.toString()}";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!kIsWeb) {
+      return const Scaffold(
+        body: Center(child: Text("⚠️ Run this on Flutter Web")),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("Mumbai Evacuation Routes")),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _regionController,
+                    decoration: InputDecoration(
+                      hintText: "Enter region name",
+                      border: const OutlineInputBorder(),
+                      errorText: _errorText,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _loadMap,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text("Show Map"),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _iframeViewType != null
+                ? Stack(
+                    children: [
+                      HtmlElementView(viewType: _iframeViewType!),
+                      if (_isLoading)
+                        const Center(child: CircularProgressIndicator()),
+                      if (_errorText != null)
+                        Center(
+                          child: Text(
+                            _errorText!,
+                            style: const TextStyle(color: Colors.red, fontSize: 16),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                    ],
+                  )
+                : const Center(
+                    child: Text(
+                      "Enter a region name and click 'Show Map' to load the evacuation routes",
+                      style: TextStyle(fontSize: 16),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }

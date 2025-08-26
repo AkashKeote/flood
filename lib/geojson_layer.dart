@@ -72,6 +72,12 @@ class _GeoJsonRoadLayerState extends State<GeoJsonRoadLayer> {
           String area = feature['properties']['areas'] ?? '';
           String highway = feature['properties']['highway_str'] ?? '';
           
+          // Skip high risk roads (level 2) to match HTML exactly
+          // HTML only shows risk 0 (green) and risk 1 (orange)
+          if (riskLevel > 1) {
+            continue;
+          }
+          
           Color roadColor = _getRiskColorFromLevel(riskLevel);
           
           // Count risk levels for debugging
@@ -81,14 +87,12 @@ class _GeoJsonRoadLayerState extends State<GeoJsonRoadLayer> {
             case 2: highRiskCount++; break;
           }
           
-          // Create polyline for this actual road segment
+          // Create polyline for this actual road segment (matching alit.py exactly)
           polylines.add(
             Polyline(
               points: points,
-              strokeWidth: _getStrokeWidth(highway, riskLevel), // Vary by road type
-              color: roadColor.withOpacity(0.8),
-              borderStrokeWidth: 0.5,
-              borderColor: roadColor.withOpacity(0.4),
+              strokeWidth: 1.2, // Exact alit.py weight
+              color: roadColor.withOpacity(0.8), // Exact llload.py opacity
             ),
           );
         }
@@ -114,17 +118,18 @@ class _GeoJsonRoadLayerState extends State<GeoJsonRoadLayer> {
   }
   
   double _getStrokeWidth(String highway, int riskLevel) {
-    // Vary road thickness based on importance and risk
-    double baseWidth = 1.5;
+    // Vary road thickness based on importance and risk - make more visible
+    double baseWidth = 2.5; // Increased base width
     
-    // Adjust for road type
-    if (highway.contains('primary')) baseWidth = 2.5;
-    else if (highway.contains('secondary')) baseWidth = 2.0;
-    else if (highway.contains('trunk')) baseWidth = 3.0;
-    else if (highway.contains('tertiary')) baseWidth = 1.5;
+    // Adjust for road type - thicker roads
+    if (highway.contains('primary')) baseWidth = 4.0;
+    else if (highway.contains('secondary')) baseWidth = 3.5;
+    else if (highway.contains('trunk')) baseWidth = 4.5;
+    else if (highway.contains('tertiary')) baseWidth = 3.0;
     
-    // Make high-risk roads slightly more visible
-    if (riskLevel >= 2) baseWidth += 0.5;
+    // Make high-risk roads even more visible
+    if (riskLevel >= 2) baseWidth += 1.0;
+    else if (riskLevel >= 1) baseWidth += 0.5;
     
     return baseWidth;
   }

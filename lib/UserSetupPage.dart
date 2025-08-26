@@ -16,6 +16,7 @@ class _UserSetupPageState extends State<UserSetupPage>
     with TickerProviderStateMixin {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   String? _selectedWard;
   List<String> _wards = [];
   late AnimationController _fadeController;
@@ -23,6 +24,7 @@ class _UserSetupPageState extends State<UserSetupPage>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   bool _isLoading = false;
+  String _notificationMethod = 'email';
 
   // Mumbai areas from backend dummyFloodData (exact names from your backend)
   final List<String> _mumbaiAreas = [
@@ -109,6 +111,7 @@ class _UserSetupPageState extends State<UserSetupPage>
     final name = await UserService.getUserName();
     final area = await UserService.getUserWard(); // Still using getUserWard for backward compatibility
     final email = await UserService.getUserEmail();
+    final phone = await UserService.getUserPhone();
     
     if (name != null && name.isNotEmpty) {
       setState(() {
@@ -119,6 +122,11 @@ class _UserSetupPageState extends State<UserSetupPage>
     if (email != null && email.isNotEmpty) {
       setState(() {
         _emailController.text = email;
+      });
+    }
+    if (phone != null && phone.isNotEmpty) {
+      setState(() {
+        _phoneController.text = phone;
       });
     }
     
@@ -133,18 +141,21 @@ class _UserSetupPageState extends State<UserSetupPage>
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _fadeController.dispose();
     _slideController.dispose();
     super.dispose();
   }
 
   void _proceedToApp() async {
-    if (_nameController.text.trim().isEmpty || 
-        _emailController.text.trim().isEmpty || 
-        _selectedWard == null) {
+    final trimmedName = _nameController.text.trim();
+    final trimmedEmail = _emailController.text.trim();
+    final trimmedPhone = _phoneController.text.trim();
+
+    if (trimmedName.isEmpty || _selectedWard == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Please enter your name, email and select an area'),
+          content: Text('Please enter your name and select an area'),
           backgroundColor: Colors.red[400],
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -155,19 +166,34 @@ class _UserSetupPageState extends State<UserSetupPage>
       return;
     }
 
-    // Validate email format
-    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(_emailController.text.trim())) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please enter a valid email address'),
-          backgroundColor: Colors.red[400],
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+    if (_notificationMethod == 'email') {
+      if (trimmedEmail.isEmpty || !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(trimmedEmail)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please enter a valid email address'),
+            backgroundColor: Colors.red[400],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
-        ),
-      );
-      return;
+        );
+        return;
+      }
+    } else {
+      if (trimmedPhone.isEmpty || !RegExp(r'^\+?[0-9]{10,15}$').hasMatch(trimmedPhone)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please enter a valid phone number'),
+            backgroundColor: Colors.red[400],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
     }
 
     if (!mounted) return;
@@ -178,20 +204,26 @@ class _UserSetupPageState extends State<UserSetupPage>
 
     try {
       // Save user data locally first
-      await UserService.saveUserData(
-        _nameController.text.trim(), 
+      await UserService.saveUserDataWithEmail(
+        trimmedName, 
         _selectedWard!, 
-        _emailController.text.trim()
+        _notificationMethod == 'email' ? trimmedEmail : null
       );
+      if (_notificationMethod == 'sms') {
+        await UserService.saveUserPhone(trimmedPhone);
+      }
 
-      // Register with backend server for email alerts
-      final result = await AuthService.registerUser(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        city: _selectedWard!,
-      );
+      // Register with backend server for email alerts (only when method is email)
+      Map<String, dynamic>? result;
+      if (_notificationMethod == 'email') {
+        result = await AuthService.registerUser(
+          name: trimmedName,
+          email: trimmedEmail,
+          city: _selectedWard!,
+        );
+      }
 
-      if (result['success']) {
+      if (result != null && result['success']) {
         // Show success message with backend confirmation
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -207,14 +239,14 @@ class _UserSetupPageState extends State<UserSetupPage>
         }
         // Send quick test email for verification
         final direct = await AlertService.sendDirect(
-          email: _emailController.text.trim(),
+          email: trimmedEmail,
           city: _selectedWard!,
         );
         if (mounted) {
           if (direct['success'] == true) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('✉️ Email sent to ${_emailController.text.trim()}'),
+                content: Text('✉️ Email sent to $trimmedEmail'),
                 backgroundColor: Colors.green[400],
                 behavior: SnackBarBehavior.floating,
                 duration: Duration(seconds: 4),
@@ -239,7 +271,7 @@ class _UserSetupPageState extends State<UserSetupPage>
         }
       } else {
         // Check if it's a duplicate email error
-        String errorMsg = result['error'] ?? 'Unknown error';
+        String errorMsg = result?['error'] ?? 'Unknown error';
         
         if (errorMsg.toLowerCase().contains('already registered')) {
           // User already exists - this is actually okay
@@ -259,14 +291,14 @@ class _UserSetupPageState extends State<UserSetupPage>
           print('✅ User already exists in backend - continuing normally');
           // Still send quick test email so user receives one now
           final direct = await AlertService.sendDirect(
-            email: _emailController.text.trim(),
+            email: trimmedEmail,
             city: _selectedWard!,
           );
           if (mounted) {
             if (direct['success'] == true) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('✉️ Test email sent to ${_emailController.text.trim()}'),
+                  content: Text('✉️ Test email sent to $trimmedEmail'),
                   backgroundColor: Colors.green[400],
                   behavior: SnackBarBehavior.floating,
                   duration: Duration(seconds: 4),
@@ -307,14 +339,14 @@ class _UserSetupPageState extends State<UserSetupPage>
           print('❌ Backend registration failed: $errorMsg');
           // Attempt direct email even if signup failed (e.g., timeout) so user gets verification
           final direct = await AlertService.sendDirect(
-            email: _emailController.text.trim(),
+            email: trimmedEmail,
             city: _selectedWard!,
           );
           if (mounted) {
             if (direct['success'] == true) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('✉️ Test email sent to ${_emailController.text.trim()}'),
+                  content: Text('✉️ Test email sent to $trimmedEmail'),
                   backgroundColor: Colors.green[400],
                   behavior: SnackBarBehavior.floating,
                   duration: Duration(seconds: 4),
@@ -567,7 +599,7 @@ class _UserSetupPageState extends State<UserSetupPage>
                             
                             SizedBox(height: isDesktop ? 24 : 16), // Reduced spacing
                             
-                            // Email Input Section
+                            // Notification method selector
                             Row(
                               children: [
                                 Container(
@@ -578,14 +610,14 @@ class _UserSetupPageState extends State<UserSetupPage>
                                     borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
                                   ),
                                   child: Icon(
-                                    Icons.email,
+                                    Icons.notifications,
                                     color: Colors.white,
                                     size: isDesktop ? 18 : 16,
                                   ),
                                 ),
                                 SizedBox(width: isDesktop ? 16 : 12),
                                 Text(
-                                  'Enter your email address',
+                                  'How should we notify you?',
                                   style: GoogleFonts.poppins(
                                     fontSize: isDesktop ? 18 : 16, // Reduced font size
                                     fontWeight: FontWeight.bold,
@@ -594,38 +626,152 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 ),
                               ],
                             ),
-                            SizedBox(height: isDesktop ? 16 : 12), // Reduced spacing
-                            TextField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              decoration: InputDecoration(
-                                hintText: 'Enter your email address',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                  borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                            SizedBox(height: isDesktop ? 12 : 10),
+                            Row(
+                              children: [
+                                ChoiceChip(
+                                  label: Text('Email'),
+                                  selected: _notificationMethod == 'email',
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      setState(() { _notificationMethod = 'email'; });
+                                    }
+                                  },
                                 ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                  borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                SizedBox(width: 12),
+                                ChoiceChip(
+                                  label: Text('SMS'),
+                                  selected: _notificationMethod == 'sms',
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      setState(() { _notificationMethod = 'sms'; });
+                                    }
+                                  },
                                 ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
-                                ),
-                                filled: true,
-                                fillColor: Color(0xFFF7F6F2),
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: isDesktop ? 20 : 16, 
-                                  vertical: isDesktop ? 16 : 14 // Reduced padding
-                                ),
-                              ),
-                              style: GoogleFonts.poppins(
-                                fontSize: isDesktop ? 18 : 16,
-                                color: Color(0xFF22223B),
-                              ),
+                              ],
                             ),
-                            
-                            SizedBox(height: isDesktop ? 24 : 16), // Reduced spacing
+                            SizedBox(height: isDesktop ? 24 : 16),
+
+                            // Email or Phone input based on selection
+                            if (_notificationMethod == 'email') ...[
+                              Row(
+                                children: [
+                                  Container(
+                                    width: isDesktop ? 32 : 28,
+                                    height: isDesktop ? 32 : 28,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFFB5C7F7),
+                                      borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
+                                    ),
+                                    child: Icon(
+                                      Icons.email,
+                                      color: Colors.white,
+                                      size: isDesktop ? 18 : 16,
+                                    ),
+                                  ),
+                                  SizedBox(width: isDesktop ? 16 : 12),
+                                  Text(
+                                    'Enter your email address',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: isDesktop ? 18 : 16, // Reduced font size
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF22223B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: isDesktop ? 16 : 12),
+                              TextField(
+                                controller: _emailController,
+                                keyboardType: TextInputType.emailAddress,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter your email address',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+                                    borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+                                    borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+                                    borderSide: BorderSide(color: Colors.grey[300]!),
+                                  ),
+                                  filled: true,
+                                  fillColor: Color(0xFFF7F6F2),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: isDesktop ? 20 : 16, 
+                                    vertical: isDesktop ? 16 : 14 // Reduced padding
+                                  ),
+                                ),
+                                style: GoogleFonts.poppins(
+                                  fontSize: isDesktop ? 18 : 16,
+                                  color: Color(0xFF22223B),
+                                ),
+                              ),
+                              SizedBox(height: isDesktop ? 24 : 16),
+                            ] else ...[
+                              Row(
+                                children: [
+                                  Container(
+                                    width: isDesktop ? 32 : 28,
+                                    height: isDesktop ? 32 : 28,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFFB5C7F7),
+                                      borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
+                                    ),
+                                    child: Icon(
+                                      Icons.sms,
+                                      color: Colors.white,
+                                      size: isDesktop ? 18 : 16,
+                                    ),
+                                  ),
+                                  SizedBox(width: isDesktop ? 16 : 12),
+                                  Text(
+                                    'Enter your mobile number',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: isDesktop ? 18 : 16, // Reduced font size
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF22223B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: isDesktop ? 16 : 12),
+                              TextField(
+                                controller: _phoneController,
+                                keyboardType: TextInputType.phone,
+                                decoration: InputDecoration(
+                                  hintText: 'e.g., 9876543210 or +919876543210',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+                                    borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+                                    borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+                                    borderSide: BorderSide(color: Colors.grey[300]!),
+                                  ),
+                                  filled: true,
+                                  fillColor: Color(0xFFF7F6F2),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: isDesktop ? 20 : 16, 
+                                    vertical: isDesktop ? 16 : 14 // Reduced padding
+                                  ),
+                                ),
+                                style: GoogleFonts.poppins(
+                                  fontSize: isDesktop ? 18 : 16,
+                                  color: Color(0xFF22223B),
+                                ),
+                              ),
+                              SizedBox(height: isDesktop ? 24 : 16),
+                            ],
+                            // spacing after conditional contact field
+                            SizedBox(height: isDesktop ? 24 : 16),
                             
                             // Area Selection Section
                             Row(
@@ -700,7 +846,7 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 if (newValue != null && newValue != previousWard) {
                                   print('🏙️ City changed from $previousWard to $newValue');
                                   final email = _emailController.text.trim();
-                                  if (email.isEmpty) {
+                                  if (_notificationMethod == 'email' && email.isEmpty) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text('Enter email first to update city'),
@@ -712,6 +858,10 @@ class _UserSetupPageState extends State<UserSetupPage>
                                         ),
                                       ),
                                     );
+                                    return;
+                                  }
+                                  if (_notificationMethod != 'email') {
+                                    // Skip backend update if using SMS notifications
                                     return;
                                   }
 

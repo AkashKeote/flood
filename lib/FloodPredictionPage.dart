@@ -38,7 +38,7 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
   // Load user's selected region from UserService
   Future<void> _loadUserRegion() async {
     try {
-      final userData = await UserService.getUser();
+      final userData = await UserService.getUserData();
       if (userData != null && userData['area'] != null) {
         final userArea = userData['area'].toString();
         // Check if user's area exists in our trained regions (case-insensitive)
