@@ -11,7 +11,7 @@ class OSMService {
   static const String _overpassUrl = 'https://overpass-api.de/api/interpreter';
   
   // Cache for road data to avoid repeated API calls
-  static Map<String, List<OSMRoad>> _roadCache = {};
+  static final Map<String, List<OSMRoad>> _roadCache = {};
   
   /// Fetch roads for Mumbai area using Overpass API
   static Future<List<OSMRoad>> fetchMumbaiRoads({
@@ -21,7 +21,7 @@ class OSMService {
     double eastLon = 73.1,
   }) async {
     
-    String cacheKey = "${southLat}_${westLon}_${northLat}_${eastLon}";
+    String cacheKey = "${southLat}_${westLon}_${northLat}_$eastLon";
     if (_roadCache.containsKey(cacheKey)) {
       print('🗂️ Using cached road data for Mumbai');
       return _roadCache[cacheKey]!;

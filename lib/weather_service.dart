@@ -126,14 +126,16 @@ class WeatherService {
     double risk = 0.0;
     
     // Precipitation amount risk
-    if (precipitation > 100) risk += 0.4;      // Very heavy rain
-    else if (precipitation > 50) risk += 0.3;  // Heavy rain
+    if (precipitation > 100) {
+      risk += 0.4;      // Very heavy rain
+    } else if (precipitation > 50) risk += 0.3;  // Heavy rain
     else if (precipitation > 25) risk += 0.2;  // Moderate rain
     else if (precipitation > 10) risk += 0.1;  // Light rain
     
     // Intensity risk
-    if (intensity > 20) risk += 0.4;          // Very intense
-    else if (intensity > 10) risk += 0.3;     // High intensity
+    if (intensity > 20) {
+      risk += 0.4;          // Very intense
+    } else if (intensity > 10) risk += 0.3;     // High intensity
     else if (intensity > 5) risk += 0.2;      // Moderate intensity
     else if (intensity > 2) risk += 0.1;      // Low intensity
     

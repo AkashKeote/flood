@@ -186,7 +186,7 @@ class _SplashScreenState extends State<SplashScreen>
                 builder: (context, child) {
                   return FadeTransition(
                     opacity: _fadeAnimation,
-                    child: Container(
+                    child: SizedBox(
                       width: 40,
                       height: 40,
                       child: CircularProgressIndicator(

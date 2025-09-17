@@ -287,26 +287,30 @@ class MumbaiPredictionData {
     
     // Elevation risk (lower = higher risk)
     double elevation = regionData['elevation']?.toDouble() ?? 10.0;
-    if (elevation < 10) score += 0.3;
-    else if (elevation < 20) score += 0.2;
+    if (elevation < 10) {
+      score += 0.3;
+    } else if (elevation < 20) score += 0.2;
     else score += 0.1;
     
     // Distance to water (closer = higher risk)
     double distanceToWater = regionData['distanceToWater']?.toDouble() ?? 1000.0;
-    if (distanceToWater < 100) score += 0.3;
-    else if (distanceToWater < 500) score += 0.2;
+    if (distanceToWater < 100) {
+      score += 0.3;
+    } else if (distanceToWater < 500) score += 0.2;
     else score += 0.1;
     
     // Population density (higher = higher risk)
     double population = regionData['population']?.toDouble() ?? 0.0;
-    if (population > 800000) score += 0.2;
-    else if (population > 500000) score += 0.15;
+    if (population > 800000) {
+      score += 0.2;
+    } else if (population > 500000) score += 0.15;
     else score += 0.1;
     
     // Built-up percentage (higher = higher risk)
     double builtUp = regionData['builtUpPercent']?.toDouble() ?? 50.0;
-    if (builtUp > 85) score += 0.2;
-    else if (builtUp > 70) score += 0.15;
+    if (builtUp > 85) {
+      score += 0.2;
+    } else if (builtUp > 70) score += 0.15;
     else score += 0.1;
     
     return score;
@@ -314,8 +318,9 @@ class MumbaiPredictionData {
 
   // Risk level based on combined score
   static String getRiskLevel(double totalScore) {
-    if (totalScore >= 0.8) return 'Critical';
-    else if (totalScore >= 0.6) return 'High';
+    if (totalScore >= 0.8) {
+      return 'Critical';
+    } else if (totalScore >= 0.6) return 'High';
     else if (totalScore >= 0.4) return 'Moderate';
     else return 'Low';
   }

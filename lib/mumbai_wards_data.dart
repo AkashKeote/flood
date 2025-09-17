@@ -1,6 +1,7 @@
 /// Complete Mumbai Wards Data
 /// This file contains all Mumbai wards with their coordinates and flood risk levels
 /// Data sourced from Mumbai Municipal Corporation ward divisions
+library;
 
 import 'package:flutter/material.dart';
 

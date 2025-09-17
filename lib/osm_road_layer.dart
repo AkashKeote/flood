@@ -1,7 +1,6 @@
 // OSM Road Layer for Real-time OpenStreetMap Integration
 // Replaces static GeoJSON with live OSM API data
 
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';

@@ -4,6 +4,8 @@ import 'main.dart';
 import 'user_service.dart';
 import 'auth_service.dart';
 import 'alert_service.dart';
+import 'AuthSignupPage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class UserSetupPage extends StatefulWidget {
   const UserSetupPage({super.key});
@@ -15,8 +17,9 @@ class UserSetupPage extends StatefulWidget {
 class _UserSetupPageState extends State<UserSetupPage>
     with TickerProviderStateMixin {
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   String? _selectedWard;
   List<String> _wards = [];
   late AnimationController _fadeController;
@@ -25,6 +28,8 @@ class _UserSetupPageState extends State<UserSetupPage>
   late Animation<Offset> _slideAnimation;
   bool _isLoading = false;
   String _notificationMethod = 'email';
+  bool _isEmailVerified = false;
+  bool _obscurePassword = true;
 
   // Mumbai areas from backend dummyFloodData (exact names from your backend)
   final List<String> _mumbaiAreas = [
@@ -137,11 +142,14 @@ class _UserSetupPageState extends State<UserSetupPage>
     }
   }
 
+  // Removed Google auth; using Email + Password fields instead.
+
   @override
   void dispose() {
     _nameController.dispose();
-    _emailController.dispose();
     _phoneController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     _fadeController.dispose();
     _slideController.dispose();
     super.dispose();
@@ -149,7 +157,6 @@ class _UserSetupPageState extends State<UserSetupPage>
 
   void _proceedToApp() async {
     final trimmedName = _nameController.text.trim();
-    final trimmedEmail = _emailController.text.trim();
     final trimmedPhone = _phoneController.text.trim();
 
     if (trimmedName.isEmpty || _selectedWard == null) {
@@ -167,7 +174,9 @@ class _UserSetupPageState extends State<UserSetupPage>
     }
 
     if (_notificationMethod == 'email') {
-      if (trimmedEmail.isEmpty || !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(trimmedEmail)) {
+      final trimmedEmail = _emailController.text.trim();
+      final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+      if (trimmedEmail.isEmpty || !emailRegex.hasMatch(trimmedEmail)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Please enter a valid email address'),
@@ -180,7 +189,20 @@ class _UserSetupPageState extends State<UserSetupPage>
         );
         return;
       }
-    } else {
+      if (!_isEmailVerified) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please verify your email and password'),
+            backgroundColor: Colors.red[400],
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+        return;
+      }
+    } else if (_notificationMethod == 'sms') {
       if (trimmedPhone.isEmpty || !RegExp(r'^\+?[0-9]{10,15}$').hasMatch(trimmedPhone)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -207,18 +229,18 @@ class _UserSetupPageState extends State<UserSetupPage>
       await UserService.saveUserDataWithEmail(
         trimmedName, 
         _selectedWard!, 
-        _notificationMethod == 'email' ? trimmedEmail : null
+        _notificationMethod == 'email' ? _emailController.text.trim() : null
       );
       if (_notificationMethod == 'sms') {
         await UserService.saveUserPhone(trimmedPhone);
       }
 
-      // Register with backend server for email alerts (only when method is email)
+      // Register with backend server for email alerts (when method is email)
       Map<String, dynamic>? result;
-      if (_notificationMethod == 'email') {
+      if (_notificationMethod == 'email' && _emailController.text.trim().isNotEmpty) {
         result = await AuthService.registerUser(
           name: trimmedName,
-          email: trimmedEmail,
+          email: _emailController.text.trim(),
           city: _selectedWard!,
         );
       }
@@ -239,14 +261,14 @@ class _UserSetupPageState extends State<UserSetupPage>
         }
         // Send quick test email for verification
         final direct = await AlertService.sendDirect(
-          email: trimmedEmail,
+          email: _emailController.text.trim(),
           city: _selectedWard!,
         );
         if (mounted) {
           if (direct['success'] == true) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('✉️ Email sent to $trimmedEmail'),
+                content: Text('✉️ Email sent to ${_emailController.text.trim()}'),
                 backgroundColor: Colors.green[400],
                 behavior: SnackBarBehavior.floating,
                 duration: Duration(seconds: 4),
@@ -269,9 +291,9 @@ class _UserSetupPageState extends State<UserSetupPage>
             );
           }
         }
-      } else {
+      } else if (result != null) {
         // Check if it's a duplicate email error
-        String errorMsg = result?['error'] ?? 'Unknown error';
+        String errorMsg = result['error'] ?? 'Unknown error';
         
         if (errorMsg.toLowerCase().contains('already registered')) {
           // User already exists - this is actually okay
@@ -291,14 +313,14 @@ class _UserSetupPageState extends State<UserSetupPage>
           print('✅ User already exists in backend - continuing normally');
           // Still send quick test email so user receives one now
           final direct = await AlertService.sendDirect(
-            email: trimmedEmail,
+            email: _emailController.text.trim(),
             city: _selectedWard!,
           );
           if (mounted) {
             if (direct['success'] == true) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('✉️ Test email sent to $trimmedEmail'),
+                  content: Text('✉️ Test email sent to ${_emailController.text.trim()}'),
                   backgroundColor: Colors.green[400],
                   behavior: SnackBarBehavior.floating,
                   duration: Duration(seconds: 4),
@@ -339,14 +361,14 @@ class _UserSetupPageState extends State<UserSetupPage>
           print('❌ Backend registration failed: $errorMsg');
           // Attempt direct email even if signup failed (e.g., timeout) so user gets verification
           final direct = await AlertService.sendDirect(
-            email: trimmedEmail,
+            email: _emailController.text.trim(),
             city: _selectedWard!,
           );
           if (mounted) {
             if (direct['success'] == true) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('✉️ Test email sent to $trimmedEmail'),
+                  content: Text('✉️ Test email sent to ${_emailController.text.trim()}'),
                   backgroundColor: Colors.green[400],
                   behavior: SnackBarBehavior.floating,
                   duration: Duration(seconds: 4),
@@ -557,12 +579,15 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   ),
                                 ),
                                 SizedBox(width: isDesktop ? 16 : 12),
-                                Text(
+                                Expanded(
+                                  child: Text(
                                   'What is your name?',
                                   style: GoogleFonts.poppins(
                                     fontSize: isDesktop ? 20 : 18,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF22223B),
+                                    ),
+                                    softWrap: true,
                                   ),
                                 ),
                               ],
@@ -616,12 +641,15 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   ),
                                 ),
                                 SizedBox(width: isDesktop ? 16 : 12),
-                                Text(
+                                Expanded(
+                                  child: Text(
                                   'How should we notify you?',
                                   style: GoogleFonts.poppins(
                                     fontSize: isDesktop ? 18 : 16, // Reduced font size
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF22223B),
+                                    ),
+                                    softWrap: true,
                                   ),
                                 ),
                               ],
@@ -630,7 +658,14 @@ class _UserSetupPageState extends State<UserSetupPage>
                             Row(
                               children: [
                                 ChoiceChip(
-                                  label: Text('Email'),
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.email, size: 16),
+                                      SizedBox(width: 4),
+                                      Text('Email'),
+                                    ],
+                                  ),
                                   selected: _notificationMethod == 'email',
                                   onSelected: (selected) {
                                     if (selected) {
@@ -640,7 +675,14 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 ),
                                 SizedBox(width: 12),
                                 ChoiceChip(
-                                  label: Text('SMS'),
+                                  label: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.sms, size: 16),
+                                      SizedBox(width: 4),
+                                      Text('SMS'),
+                                    ],
+                                  ),
                                   selected: _notificationMethod == 'sms',
                                   onSelected: (selected) {
                                     if (selected) {
@@ -652,40 +694,43 @@ class _UserSetupPageState extends State<UserSetupPage>
                             ),
                             SizedBox(height: isDesktop ? 24 : 16),
 
-                            // Email or Phone input based on selection
+                            // Contact method input based on selection
                             if (_notificationMethod == 'email') ...[
-                              Row(
-                                children: [
-                                  Container(
-                                    width: isDesktop ? 32 : 28,
-                                    height: isDesktop ? 32 : 28,
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFFB5C7F7),
-                                      borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
-                                    ),
-                                    child: Icon(
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: isDesktop ? 32 : 28,
+                                      height: isDesktop ? 32 : 28,
+                                      decoration: BoxDecoration(
+                                        color: Color(0xFFB5C7F7),
+                                        borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
+                                      ),
+                                      child: Icon(
                                       Icons.email,
-                                      color: Colors.white,
-                                      size: isDesktop ? 18 : 16,
+                                        color: Colors.white,
+                                        size: isDesktop ? 18 : 16,
+                                      ),
                                     ),
-                                  ),
-                                  SizedBox(width: isDesktop ? 16 : 12),
-                                  Text(
-                                    'Enter your email address',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: isDesktop ? 18 : 16, // Reduced font size
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF22223B),
+                                    SizedBox(width: isDesktop ? 16 : 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Enter your email and password',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: isDesktop ? 18 : 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF22223B),
+                                      ),
+                                      softWrap: true,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              SizedBox(height: isDesktop ? 16 : 12),
+                                  ],
+                                ),
+                                SizedBox(height: isDesktop ? 16 : 12),
                               TextField(
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
                                 decoration: InputDecoration(
-                                  hintText: 'Enter your email address',
+                                  hintText: 'your@email.com',
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
                                     borderSide: BorderSide(color: Color(0xFFB5C7F7)),
@@ -701,8 +746,8 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   filled: true,
                                   fillColor: Color(0xFFF7F6F2),
                                   contentPadding: EdgeInsets.symmetric(
-                                    horizontal: isDesktop ? 20 : 16, 
-                                    vertical: isDesktop ? 16 : 14 // Reduced padding
+                                    horizontal: isDesktop ? 20 : 16,
+                                        vertical: isDesktop ? 16 : 14,
                                   ),
                                 ),
                                 style: GoogleFonts.poppins(
@@ -710,6 +755,146 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   color: Color(0xFF22223B),
                                 ),
                               ),
+                              SizedBox(height: isDesktop ? 12 : 10),
+                              TextField(
+                                controller: _passwordController,
+                                obscureText: _obscurePassword,
+                                decoration: InputDecoration(
+                                  hintText: 'Password',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+                                    borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+                                    borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
+                                    borderSide: BorderSide(color: Colors.grey[300]!),
+                                  ),
+                                  filled: true,
+                                  fillColor: Color(0xFFF7F6F2),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: isDesktop ? 20 : 16,
+                                    vertical: isDesktop ? 16 : 14,
+                                  ),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                                    onPressed: () {
+                                      setState(() { _obscurePassword = !_obscurePassword; });
+                                    },
+                                  ),
+                                ),
+                                            style: GoogleFonts.poppins(
+                                              fontSize: isDesktop ? 18 : 16,
+                                              color: Color(0xFF22223B),
+                                            ),
+                                          ),
+                              SizedBox(height: isDesktop ? 12 : 10),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : () async {
+                                    final email = _emailController.text.trim();
+                                    final password = _passwordController.text.trim();
+                                    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+                                    if (email.isEmpty || !emailRegex.hasMatch(email)) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Please enter a valid email address'),
+                                          backgroundColor: Colors.red[400],
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    if (password.isEmpty) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Please enter your password'),
+                                          backgroundColor: Colors.red[400],
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    setState(() { _isLoading = true; });
+                                    try {
+                                      await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+                                      final user = FirebaseAuth.instance.currentUser;
+                                      if (user != null && user.emailVerified) {
+                                        setState(() { _isEmailVerified = true; });
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('✅ Email verified'),
+                                            backgroundColor: Colors.green[400],
+                                            behavior: SnackBarBehavior.floating,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          ),
+                                        );
+                                      } else {
+                                        setState(() { _isEmailVerified = false; });
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('📧 Verify your email from inbox, then try again'),
+                                            backgroundColor: Colors.orange[400],
+                                            behavior: SnackBarBehavior.floating,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          ),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      setState(() { _isEmailVerified = false; });
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('❌ Login failed: $e'),
+                                          backgroundColor: Colors.red[400],
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                      );
+                                    } finally {
+                                      if (mounted) setState(() { _isLoading = false; });
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _isEmailVerified ? Colors.green[600] : Color(0xFFB5C7F7),
+                                    foregroundColor: Color(0xFF22223B),
+                                    padding: EdgeInsets.symmetric(
+                                      vertical: isDesktop ? 16 : 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(isDesktop ? 12 : 10),
+                                    ),
+                                  ),
+                                  child: Text(_isEmailVerified ? 'Verified' : 'Verify Email'),
+                                ),
+                              ),
+                              SizedBox(height: isDesktop ? 8 : 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text("Don't have an account? ", style: GoogleFonts.poppins(fontSize: isDesktop ? 14 : 12)),
+                                    TextButton(
+                                    onPressed: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(builder: (context) => const AuthSignupPage()),
+                                      );
+                                    },
+                                      child: Text(
+                                      'Sign up',
+                                      style: GoogleFonts.poppins(fontSize: isDesktop ? 14 : 12, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               SizedBox(height: isDesktop ? 24 : 16),
                             ] else ...[
                               Row(
@@ -728,12 +913,15 @@ class _UserSetupPageState extends State<UserSetupPage>
                                     ),
                                   ),
                                   SizedBox(width: isDesktop ? 16 : 12),
-                                  Text(
+                                  Expanded(
+                                    child: Text(
                                     'Enter your mobile number',
                                     style: GoogleFonts.poppins(
-                                      fontSize: isDesktop ? 18 : 16, // Reduced font size
+                                      fontSize: isDesktop ? 18 : 16,
                                       fontWeight: FontWeight.bold,
                                       color: Color(0xFF22223B),
+                                      ),
+                                      softWrap: true,
                                     ),
                                   ),
                                 ],
@@ -760,7 +948,7 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   fillColor: Color(0xFFF7F6F2),
                                   contentPadding: EdgeInsets.symmetric(
                                     horizontal: isDesktop ? 20 : 16, 
-                                    vertical: isDesktop ? 16 : 14 // Reduced padding
+                                    vertical: isDesktop ? 16 : 14
                                   ),
                                 ),
                                 style: GoogleFonts.poppins(
@@ -790,19 +978,22 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   ),
                                 ),
                                 SizedBox(width: isDesktop ? 16 : 12),
-                                Text(
+                                Expanded(
+                                  child: Text(
                                   'Select your area',
                                   style: GoogleFonts.poppins(
                                     fontSize: isDesktop ? 20 : 18,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF22223B),
+                                    ),
+                                    softWrap: true,
                                   ),
                                 ),
                               ],
                             ),
                             SizedBox(height: isDesktop ? 20 : 16),
                             DropdownButtonFormField<String>(
-                              value: _wards.contains(_selectedWard) ? _selectedWard : null,
+                              initialValue: _wards.contains(_selectedWard) ? _selectedWard : null,
                               decoration: InputDecoration(
                                 hintText: 'Select your area in Mumbai',
                                 border: OutlineInputBorder(
@@ -845,12 +1036,24 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 // When city changes, update user's city in backend
                                 if (newValue != null && newValue != previousWard) {
                                   print('🏙️ City changed from $previousWard to $newValue');
-                                  final email = _emailController.text.trim();
-                                  if (_notificationMethod == 'email' && email.isEmpty) {
+                                  if (_notificationMethod == 'email' && _emailController.text.trim().isNotEmpty) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('Enter email first to update city'),
-                                        backgroundColor: Colors.orange[400],
+                                        content: Row(
+                                          children: [
+                                            SizedBox(
+                                              width: 20,
+                                              height: 20,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                              ),
+                                            ),
+                                            SizedBox(width: 12),
+                                            Text('Updating your area to $newValue...'),
+                                          ],
+                                        ),
+                                        backgroundColor: Colors.blue[400],
                                         behavior: SnackBarBehavior.floating,
                                         duration: Duration(seconds: 3),
                                         shape: RoundedRectangleBorder(
@@ -858,67 +1061,40 @@ class _UserSetupPageState extends State<UserSetupPage>
                                         ),
                                       ),
                                     );
-                                    return;
-                                  }
-                                  if (_notificationMethod != 'email') {
+
+                                    final updateResult = await AlertService.updateCity(
+                                      email: _emailController.text.trim(),
+                                      newCity: newValue,
+                                    );
+
+                                    if (updateResult['success'] == true) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('✅ Area updated to $newValue'),
+                                          backgroundColor: Colors.green[400],
+                                          behavior: SnackBarBehavior.floating,
+                                          duration: Duration(seconds: 3),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                      );
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('⚠️ Update failed: ${updateResult['error']}'),
+                                          backgroundColor: Colors.orange[400],
+                                          behavior: SnackBarBehavior.floating,
+                                          duration: Duration(seconds: 4),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  } else if (_notificationMethod == 'sms') {
                                     // Skip backend update if using SMS notifications
                                     return;
-                                  }
-
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Row(
-                                        children: [
-                                          SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                            ),
-                                          ),
-                                          SizedBox(width: 12),
-                                          Text('Updating your area to $newValue...'),
-                                        ],
-                                      ),
-                                      backgroundColor: Colors.blue[400],
-                                      behavior: SnackBarBehavior.floating,
-                                      duration: Duration(seconds: 3),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                  );
-
-                                  final updateResult = await AlertService.updateCity(
-                                    email: email,
-                                    newCity: newValue,
-                                  );
-
-                                  if (updateResult['success'] == true) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('✅ Area updated to $newValue'),
-                                        backgroundColor: Colors.green[400],
-                                        behavior: SnackBarBehavior.floating,
-                                        duration: Duration(seconds: 3),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                    );
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('⚠️ Update failed: ${updateResult['error']}'),
-                                        backgroundColor: Colors.orange[400],
-                                        behavior: SnackBarBehavior.floating,
-                                        duration: Duration(seconds: 4),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                    );
                                   }
                                 }
                               },
@@ -930,7 +1106,7 @@ class _UserSetupPageState extends State<UserSetupPage>
                       SizedBox(height: isDesktop ? 30 : 20), // Reduced spacing
 
                       // Continue Button
-                      Container(
+                      SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _proceedToApp,

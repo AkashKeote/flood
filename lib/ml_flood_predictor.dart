@@ -359,8 +359,9 @@ class MLFloodPredictor {
 
   /// Convert score to risk level
   static String _scoreToRiskLevel(double score) {
-    if (score >= 0.75) return 'Critical';
-    else if (score >= 0.55) return 'High';
+    if (score >= 0.75) {
+      return 'Critical';
+    } else if (score >= 0.55) return 'High';
     else if (score >= 0.35) return 'Moderate';
     else return 'Low';
   }

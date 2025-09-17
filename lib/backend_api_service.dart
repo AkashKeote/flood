@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-/// Service to interact with Hugging Face backend APIs
+/// Service to interact with local backend APIs
 class BackendApiService {
-  // Hugging Face Spaces deployment - updated to match server.py endpoints
-  static const String baseUrl = 'https://akashkeote-EvacuationRoute-API.hf.space';
+  // Local backend URL
+  static const String baseUrl = 'http://127.0.0.1:5000';
   
   // Common headers for API requests
   static const Map<String, String> _headers = {
@@ -85,7 +85,7 @@ class BackendApiService {
           'region': region,
           'route_count': routeCount,
         }),
-      ).timeout(Duration(seconds: 30)); // Add 30 second timeout
+      );
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -102,7 +102,7 @@ class BackendApiService {
   static Future<String> getEvacuationMap(String region) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/map?region=${Uri.encodeComponent(region)}'),
+        Uri.parse('$baseUrl/map?region=$region'),
         headers: {
           'Accept': 'text/html,application/json',
         },

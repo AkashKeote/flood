@@ -4,6 +4,7 @@ import 'mumbai_prediction_data.dart';
 import 'weather_service.dart';
 import 'user_service.dart';
 import 'ml_flood_predictor.dart';
+import 'fastapi_flood_service.dart';
 
 class FloodPredictionPage extends StatefulWidget {
   const FloodPredictionPage({super.key});
@@ -23,16 +24,42 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
   String _errorMessage = '';
   String _searchQuery = '';
   
-  // All regions from training data
-  List<String> _allRegions = MumbaiPredictionData.getAllRegionNames();
+  // All regions from backend
+  List<String> _allRegions = [];
   List<String> _filteredRegions = [];
+  bool _loadingRegions = false;
 
   @override
   void initState() {
     super.initState();
-    _updateFilteredRegions();
+    _loadBackendRegions();
     _loadUserRegion();
     _loadUserRegionPrediction();
+  }
+
+  // Load regions from backend
+  Future<void> _loadBackendRegions() async {
+    setState(() {
+      _loadingRegions = true;
+    });
+    
+    try {
+      final regions = await FastApiFloodService.getAreas();
+      setState(() {
+        _allRegions = regions;
+        _updateFilteredRegions();
+        _loadingRegions = false;
+      });
+      print('✅ Loaded ${regions.length} regions from backend: $regions');
+    } catch (e) {
+      print('❌ Failed to load backend regions: $e');
+      // Fallback to local regions
+      setState(() {
+        _allRegions = MumbaiPredictionData.getAllRegionNames();
+        _updateFilteredRegions();
+        _loadingRegions = false;
+      });
+    }
   }
 
   // Load user's selected region from UserService
@@ -41,11 +68,13 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
       final userData = await UserService.getUserData();
       if (userData != null && userData['area'] != null) {
         final userArea = userData['area'].toString();
-        // Check if user's area exists in our trained regions (case-insensitive)
-        final matchingRegion = _allRegions.firstWhere(
-          (region) => region.toLowerCase() == userArea.toLowerCase(),
-          orElse: () => 'Andheri East', // Default fallback
-        );
+        // Check if user's area exists in our regions (case-insensitive)
+        final matchingRegion = _allRegions.isNotEmpty 
+          ? _allRegions.firstWhere(
+              (region) => region.toLowerCase() == userArea.toLowerCase(),
+              orElse: () => _allRegions.isNotEmpty ? _allRegions.first : 'Andheri East',
+            )
+          : 'Andheri East';
         
     setState(() {
           _userSelectedRegion = matchingRegion;
@@ -76,6 +105,46 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
     });
 
     try {
+      // First try backend FastAPI prediction (uses trained model + forecast CSV)
+      try {
+        final backendResult = await FastApiFloodService.predict(regionName);
+
+        final backendPredictions = {
+          'region_name': backendResult['matched_area'] ?? regionName,
+          'overall_risk': (backendResult['flood_risk'] ?? 'Low').toString(),
+          'overall_risk_score': 0.0,
+          'confidence': ((backendResult['match_score'] ?? 80) as num) / 100.0,
+          'daily_predictions': <Map<String, dynamic>>[],
+          'model_info': {
+            'algorithm': 'Backend FastAPI (Ensemble Model)',
+            'features_used': ['trained_model'],
+            'accuracy_estimate': 0.0,
+          },
+          'feature_contributions': {},
+          'weather_summary': {
+            'total_rainfall_7days': backendResult['rainfall'] ?? 0.0,
+            'max_intensity': 0.0,
+            'rainy_days_count': null,
+            'average_daily_rainfall': null,
+          },
+          'last_updated': DateTime.now().toIso8601String(),
+        };
+
+        setState(() {
+          if (isUserRegion) {
+          _isLoading = false;
+            _predictionData = backendPredictions;
+          } else {
+            _isLoadingAlternate = false;
+            _alternateRegionData = backendPredictions;
+          }
+        });
+
+        return; // Show backend result, skip local ML fallback
+      } catch (_) {
+        // Ignore and fallback to local ML below
+      }
+
       // Get region static data
       final regionData = MumbaiPredictionData.getRegionData(regionName);
       if (regionData == null || regionData.isEmpty) {
@@ -173,9 +242,14 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
         ? _buildLoadingWidget()
         : SingleChildScrollView(
             padding: EdgeInsets.all(16),
-          child: Column(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+                // Main City Selection
+                _buildMainCitySelector(),
+                
+                SizedBox(height: 20),
+                
                 // User's Area Prediction Section
                 _buildUserAreaSection(),
                 
@@ -217,6 +291,170 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildMainCitySelector() {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.location_city, color: Color(0xFF22223B), size: 24),
+              SizedBox(width: 12),
+              Text(
+                '🏙️ Select City/Region',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF22223B),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          
+          if (_loadingRegions) ...[
+            Center(
+              child: Column(
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22223B)),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Loading cities...',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Color(0xFF666666),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // Search Bar
+            TextField(
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value;
+                  _updateFilteredRegions();
+                });
+              },
+              decoration: InputDecoration(
+                hintText: 'Search city (e.g., Bandra, Colaba, Dadar)...',
+                prefixIcon: Icon(Icons.search, color: Color(0xFF22223B)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Color(0xFF22223B), width: 2),
+                ),
+              ),
+            ),
+            
+            SizedBox(height: 16),
+            
+            // City Dropdown
+            DropdownButtonFormField<String>(
+              value: _filteredRegions.contains(_selectedRegion) ? _selectedRegion : null,
+              decoration: InputDecoration(
+                labelText: 'Choose City/Region',
+                prefixIcon: Icon(Icons.map, color: Color(0xFF22223B)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Color(0xFF22223B), width: 2),
+                ),
+              ),
+              items: _filteredRegions.map((region) {
+                return DropdownMenuItem<String>(
+                  value: region,
+                  child: Text(
+                    region,
+                    style: GoogleFonts.poppins(fontSize: 14),
+                  ),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    _selectedRegion = newValue;
+                  });
+                  _predictFloodForRegion(newValue, isUserRegion: false);
+                }
+              },
+            ),
+            
+            SizedBox(height: 16),
+            
+            // Quick City Buttons
+            if (_allRegions.isNotEmpty) ...[
+              Text(
+                'Quick Select:',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFF666666),
+                ),
+              ),
+              SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _allRegions.take(4).map((region) {
+                  final isSelected = _selectedRegion == region;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedRegion = region;
+                      });
+                      _predictFloodForRegion(region, isUserRegion: false);
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? Color(0xFF22223B) : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? Color(0xFF22223B) : Colors.grey.shade300,
+                        ),
+                      ),
+                      child: Text(
+                        region,
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: isSelected ? Colors.white : Color(0xFF666666),
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 
@@ -385,7 +623,7 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
             
             // Region Dropdown
             DropdownButtonFormField<String>(
-              value: _filteredRegions.contains(_selectedRegion) ? _selectedRegion : null,
+              initialValue: _filteredRegions.contains(_selectedRegion) ? _selectedRegion : null,
               decoration: InputDecoration(
                 labelText: 'Select Region',
                 prefixIcon: Icon(Icons.location_city, color: Color(0xFF22223B)),
@@ -624,7 +862,7 @@ class _FloodPredictionPageState extends State<FloodPredictionPage> {
                 ],
             ),
           );
-        }).toList(),
+        }),
         
         SizedBox(height: 12),
         

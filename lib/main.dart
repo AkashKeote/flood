@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'DashboardPage.dart';
-import 'package:flood/FloodPredictionPage.dart';
 import 'RoutePage.dart';
 import 'EmergencyPage.dart';
 import 'ProfilePage.dart';
@@ -10,8 +10,21 @@ import 'package:google_fonts/google_fonts.dart';
 import 'SplashScreen.dart';
 import 'UserSetupPage.dart';
 import 'user_service.dart';
+import 'fastapi_flood_service.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: const FirebaseOptions(
+      apiKey: 'AIzaSyDHYESdlMPD1svkbGa1R_c2ZKZQ_a44pfE',
+      authDomain: 'flood-66d6c.firebaseapp.com',
+      projectId: 'flood-66d6c',
+      storageBucket: 'flood-66d6c.firebasestorage.app',
+      messagingSenderId: '684291810558',
+      appId: '1:684291810558:web:0be43308aa4ad8907fb1af',
+      measurementId: 'G-BTCYY5GV69',
+    ),
+  );
   runApp(const FloodManagementApp());
 }
 
@@ -29,8 +42,7 @@ class FloodManagementApp extends StatelessWidget {
         primaryColor: Color(0xFFB5C7F7), // pastel blue
         colorScheme: ColorScheme.light(
           primary: Color(0xFFB5C7F7),
-          secondary: Color(0xFFF9E79F), // pastel yellow
-          background: Color(0xFFF7F6F2),
+          secondary: Color(0xFFF9E79F),
           surface: Colors.white,
         ),
         textTheme: GoogleFonts.poppinsTextTheme(
@@ -59,7 +71,7 @@ class FloodManagementApp extends StatelessWidget {
           foregroundColor: Color(0xFF22223B),
         ),
       ),
-      home: const ResponsiveWrapper(child: SplashScreen()),
+      home: const SplashScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -362,7 +374,7 @@ class _DashboardMaterialState extends State<DashboardMaterial> {
 
   static final List<Widget> _screens = <Widget>[
     DashboardPage(),
-    FloodPredictionPage(),
+    FloodPredictionScreen(),
     RoutePage(),
     EmergencyPage(),
     ProfilePage(),
@@ -888,175 +900,468 @@ class FloodPredictionScreen extends StatefulWidget {
 
 class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
   String _predictionResult = 'No prediction yet.';
+  List<String> _areas = [];
+  String? _selectedArea;
+  bool _loadingAreas = false;
+  bool _predicting = false;
 
-  void _getPrediction() {
+  @override
+  void initState() {
+    super.initState();
+    _loadAreas();
+  }
+
+  Future<void> _loadAreas() async {
     setState(() {
-      _predictionResult = 'Flood risk: LOW\n(Example prediction)';
+      _loadingAreas = true;
     });
+    try {
+      final areas = await FastApiFloodService.getAreas();
+      setState(() {
+        _areas = areas;
+        if (_areas.isNotEmpty) {
+          _selectedArea = _areas.first;
+        }
+      });
+    } catch (e) {
+      // Fallback
+      setState(() {
+        _areas = ['Andheri East'];
+        _selectedArea = 'Andheri East';
+      });
+    } finally {
+      setState(() {
+        _loadingAreas = false;
+      });
+    }
+  }
+
+  Future<void> _getPrediction() async {
+    if (_selectedArea == null) return;
+    setState(() {
+      _predicting = true;
+      _predictionResult = 'Predicting for $_selectedArea...';
+    });
+    try {
+      final res = await FastApiFloodService.predict(_selectedArea!);
+      final risk = (res['flood_risk'] ?? 'Unknown').toString();
+      final date = (res['date'] ?? '').toString();
+      final rain = (res['rainfall'] ?? 0).toString();
+      final matched = (res['matched_area'] ?? _selectedArea).toString();
+      final score = (res['match_score'] ?? 0).toString();
+      setState(() {
+        _predictionResult = 'City: '+matched+'\nDate: '+date+'\nFlood risk: '+risk+'\nRainfall: '+rain+' mm\nMatch score: '+score+'%';
+      });
+    } catch (e) {
+      setState(() {
+        _predictionResult = 'Error: '+e.toString();
+      });
+    } finally {
+      setState(() {
+        _predicting = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
+      backgroundColor: const Color(0xFFF7F6F2),
       body: SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Hero Banner
-            Stack(
-              children: [
-                Container(
-                  width: double.infinity,
-                  height: 180,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF43cea2), Color(0xFF185a9d)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(32),
-                      bottomRight: Radius.circular(32),
-                    ),
-                  ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
+              child: Text(
+                'AI Flood Prediction\nSmart Analysis',
+                style: GoogleFonts.poppins(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF22223B),
                 ),
-                Positioned(
-                  right: 24,
-                  bottom: 0,
-                  child: Image.asset(
-                    'assets/images/water_level.png',
-                    height: 110,
-                    fit: BoxFit.contain,
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Row(
+                children: const [
+                  _ComicStatCard(
+                    title: 'AI Confidence',
+                    value: '85%',
+                    color: Color(0xFFF9E79F),
+                    icon: Icons.psychology_rounded,
                   ),
+                  SizedBox(width: 16),
+                  _ComicStatCard(
+                    title: 'Data Points',
+                    value: '1,247',
+                    color: Color(0xFFD6EAF8),
+                    icon: Icons.analytics_rounded,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // City/Region selector
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                Positioned(
-                  left: 24,
-                  top: 60,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text(
-                        'Flood Prediction',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Select City/Region',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF22223B),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_loadingAreas)
+                      const Center(child: CircularProgressIndicator())
+                    else
+                      DropdownButtonFormField<String>(
+                        value: _selectedArea,
+                        items: _areas
+                            .map((a) => DropdownMenuItem<String>(
+                                  value: a,
+                                  child: Text(a),
+                                ))
+                            .toList(),
+                        onChanged: (v) => setState(() => _selectedArea = v),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.location_city),
+                          labelText: 'City',
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'AI-powered risk analysis',
-                        style: TextStyle(color: Colors.white, fontSize: 15),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-                Positioned(
-                  left: 8,
-                  top: 36,
-                  child: Icon(
-                    Icons.analytics,
-                    color: Colors.white.withOpacity(0.7),
-                    size: 40,
-                  ),
-                ),
-                SafeArea(
-                  child: IconButton(
-                    icon: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white,
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18.0),
+              child: Wrap(
+                spacing: 10,
+                children: const [
+                  _ComicChip(label: 'Weather', color: Color(0xFFD6EAF8)),
+                  _ComicChip(label: 'Rainfall', color: Color(0xFFF9E79F)),
+                  _ComicChip(label: 'Drainage', color: Color(0xFFB5C7F7)),
+                  _ComicChip(label: 'History', color: Color(0xFFE8D5C4)),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.08),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
                     ),
-                    onPressed: () => Navigator.of(context).pop(),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.auto_awesome, color: Color(0xFFB5C7F7), size: 28),
+                        SizedBox(width: 12),
+                        Text(
+                          'AI Prediction Result',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF22223B),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF7F6F2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        _predictionResult,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Color(0xFF22223B),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _ComicButton(
+                      onPressed: _predicting || _selectedArea == null ? null : () { _getPrediction(); },
+                      label: 'Get AI Prediction',
+                      color: const Color(0xFFB5C7F7),
+                      icon: Icons.psychology_rounded,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18.0),
+              child: Text(
+                'Prediction Features',
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF22223B),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Column(
+                children: const [
+                  _ComicFeatureCard(
+                    icon: Icons.water_drop_rounded,
+                    title: 'Water Level Analysis',
+                    subtitle: 'Real-time monitoring',
+                    color: Color(0xFFD6EAF8),
+                  ),
+                  SizedBox(height: 12),
+                  _ComicFeatureCard(
+                    icon: Icons.cloud_rounded,
+                    title: 'Weather Integration',
+                    subtitle: 'Rainfall prediction',
+                    color: Color(0xFFF9E79F),
+                  ),
+                  SizedBox(height: 12),
+                  _ComicFeatureCard(
+                    icon: Icons.history_rounded,
+                    title: 'Historical Data',
+                    subtitle: 'Pattern recognition',
+                    color: Color(0xFFE8D5C4),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComicStatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final Color color;
+  final IconData icon;
+
+  const _ComicStatCard({
+    required this.title,
+    required this.value,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: const Color(0xFF22223B), size: 32),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF22223B),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 18, color: Color(0xFF22223B)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComicChip extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _ComicChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      label: Text(label, style: const TextStyle(color: Color(0xFF22223B))),
+      backgroundColor: color,
+      shape: const StadiumBorder(),
+    );
+  }
+}
+
+class _ComicButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  const _ComicButton({
+    required this.onPressed,
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool disabled = onPressed == null;
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        decoration: BoxDecoration(
+          color: disabled ? color.withOpacity(0.5) : color,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF22223B), size: 24),
+            const SizedBox(width: 8),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF22223B),
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComicFeatureCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+
+  const _ComicFeatureCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF22223B), size: 32),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF22223B),
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: const Color(0xFF22223B).withOpacity(0.7),
+                    fontSize: 14,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 36),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                  child: Container(
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                        color: Colors.blue.shade100,
-                        width: 1.2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.08),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        const SizedBox(height: 8),
-                        Text(
-                          _predictionResult,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            color: Colors.black,
-                            fontWeight: FontWeight.w600,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 32),
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 400),
-                          curve: Curves.easeInOut,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(30),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.withOpacity(0.18),
-                                blurRadius: 16,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: ElevatedButton.icon(
-                            onPressed: _getPrediction,
-                            icon: const Icon(
-                              Icons.analytics,
-                              color: Colors.white,
-                            ),
-                            label: const Text('Get Flood Prediction'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[800],
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 18,
-                                horizontal: 28,
-                              ),
-                              textStyle: const TextStyle(
-                                fontSize: 19,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(30),
-                              ),
-                              elevation: 0,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 48),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

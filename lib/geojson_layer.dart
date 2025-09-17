@@ -122,14 +122,16 @@ class _GeoJsonRoadLayerState extends State<GeoJsonRoadLayer> {
     double baseWidth = 2.5; // Increased base width
     
     // Adjust for road type - thicker roads
-    if (highway.contains('primary')) baseWidth = 4.0;
-    else if (highway.contains('secondary')) baseWidth = 3.5;
+    if (highway.contains('primary')) {
+      baseWidth = 4.0;
+    } else if (highway.contains('secondary')) baseWidth = 3.5;
     else if (highway.contains('trunk')) baseWidth = 4.5;
     else if (highway.contains('tertiary')) baseWidth = 3.0;
     
     // Make high-risk roads even more visible
-    if (riskLevel >= 2) baseWidth += 1.0;
-    else if (riskLevel >= 1) baseWidth += 0.5;
+    if (riskLevel >= 2) {
+      baseWidth += 1.0;
+    } else if (riskLevel >= 1) baseWidth += 0.5;
     
     return baseWidth;
   }
