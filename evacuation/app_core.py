@@ -313,8 +313,16 @@ def build_and_save_map(start_region_name: str, routes: list, out_file: str):
     folium.TileLayer("OpenStreetMap", name="OpenStreetMap").add_to(m)
     folium.TileLayer("cartodbpositron", name="Light", attr="© OpenStreetMap contributors © CARTO").add_to(m)
     folium.TileLayer("cartodbdark_matter", name="Dark", attr="© OpenStreetMap contributors © CARTO").add_to(m)
-    folium.TileLayer("Stamen Terrain", name="Terrain", attr="Map tiles by Stamen Design, © OpenStreetMap").add_to(m)
-    folium.TileLayer("Stamen Toner", name="Toner", attr="Map tiles by Stamen Design, © OpenStreetMap").add_to(m)
+    folium.TileLayer(
+        tiles="https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png",
+        name="Terrain", 
+        attr="Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL"
+    ).add_to(m)
+    folium.TileLayer(
+        tiles="https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png",
+        name="Toner", 
+        attr="Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL"
+    ).add_to(m)
 
     # Enhanced map controls (from alit.py)
     MiniMap(toggle_display=True).add_to(m)

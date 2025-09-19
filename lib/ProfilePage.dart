@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'user_service.dart';
 import 'UserSetupPage.dart';
+import 'EditProfilePage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -13,30 +15,165 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   String userName = 'User';
   String userWard = 'Ward';
+  String userEmail = '';
+  String userPhone = '';
+  bool notificationsEnabled = true;
+  bool locationEnabled = true;
+  bool privacyEnabled = true;
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadSettings();
   }
 
   Future<void> _loadUserData() async {
     final name = await UserService.getUserName();
     final ward = await UserService.getUserWard();
-    
+    final email = await UserService.getUserEmail();
+    final phone = await UserService.getUserPhone();
+
     setState(() {
       userName = name ?? 'User';
       userWard = ward ?? 'Ward';
+      userEmail = email ?? '';
+      userPhone = phone ?? '+91 98765 43210';
+    });
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+      locationEnabled = prefs.getBool('location_enabled') ?? true;
+      privacyEnabled = prefs.getBool('privacy_enabled') ?? true;
     });
   }
 
   Future<void> _logout() async {
     await UserService.logout();
-    
+
     // Navigate to UserSetupPage
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const UserSetupPage()),
       (route) => false,
+    );
+  }
+
+  Future<void> _editProfile() async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => EditProfilePage(
+          currentName: userName,
+          currentWard: userWard,
+          currentEmail: userEmail,
+          currentPhone: userPhone,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      // Reload user data after editing
+      await _loadUserData();
+    }
+  }
+
+  Future<void> _toggleNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      notificationsEnabled = !notificationsEnabled;
+    });
+    await prefs.setBool('notifications_enabled', notificationsEnabled);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          notificationsEnabled
+              ? 'Push notifications enabled'
+              : 'Push notifications disabled',
+        ),
+        backgroundColor: notificationsEnabled ? Colors.green : Colors.orange,
+      ),
+    );
+  }
+
+  Future<void> _toggleLocation() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      locationEnabled = !locationEnabled;
+    });
+    await prefs.setBool('location_enabled', locationEnabled);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          locationEnabled
+              ? 'Location services enabled'
+              : 'Location services disabled',
+        ),
+        backgroundColor: locationEnabled ? Colors.green : Colors.orange,
+      ),
+    );
+  }
+
+  Future<void> _togglePrivacy() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      privacyEnabled = !privacyEnabled;
+    });
+    await prefs.setBool('privacy_enabled', privacyEnabled);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          privacyEnabled
+              ? 'Privacy settings enabled'
+              : 'Privacy settings disabled',
+        ),
+        backgroundColor: privacyEnabled ? Colors.green : Colors.orange,
+      ),
+    );
+  }
+
+  Future<void> _showHelpSupport() async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Help & Support'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Need help? Here are some options:'),
+            SizedBox(height: 16),
+            Text('📧 Email: support@floodapp.com'),
+            Text('📞 Phone: +91 98765 43210'),
+            Text('💬 Live Chat: Available 24/7'),
+            SizedBox(height: 16),
+            Text('Common Issues:'),
+            Text('• Reset password'),
+            Text('• Update location'),
+            Text('• Report bugs'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _shareApp() async {
+    // This would typically use a share package
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Share functionality would open here'),
+        backgroundColor: Colors.blue,
+      ),
     );
   }
 
@@ -48,8 +185,10 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           // Header
           Padding(
-            padding:
-                const EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
+            padding: const EdgeInsets.symmetric(
+              vertical: 32.0,
+              horizontal: 24.0,
+            ),
             child: Text(
               'Your Profile\nSettings & Info',
               style: GoogleFonts.poppins(
@@ -154,7 +293,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       _ComicInfoItem(
                         icon: Icons.phone_rounded,
-                        label: '+91 98765 43210',
+                        label: userPhone,
                         color: Color(0xFFF9E79F),
                       ),
                     ],
@@ -188,25 +327,40 @@ class _ProfilePageState extends State<ProfilePage> {
                 _ComicSettingCard(
                   icon: Icons.notifications_rounded,
                   title: 'Push Notifications',
-                  subtitle: 'Get flood alerts',
+                  subtitle: notificationsEnabled ? 'Enabled' : 'Disabled',
                   color: Color(0xFFD6EAF8),
-                  onTap: () {},
+                  onTap: _toggleNotifications,
+                  trailing: Switch(
+                    value: notificationsEnabled,
+                    onChanged: (value) => _toggleNotifications(),
+                    activeColor: Color(0xFF22223B),
+                  ),
                 ),
                 SizedBox(height: 12),
                 _ComicSettingCard(
                   icon: Icons.location_on_rounded,
                   title: 'Location Services',
-                  subtitle: 'Share your location',
+                  subtitle: locationEnabled ? 'Enabled' : 'Disabled',
                   color: Color(0xFFF9E79F),
-                  onTap: () {},
+                  onTap: _toggleLocation,
+                  trailing: Switch(
+                    value: locationEnabled,
+                    onChanged: (value) => _toggleLocation(),
+                    activeColor: Color(0xFF22223B),
+                  ),
                 ),
                 SizedBox(height: 12),
                 _ComicSettingCard(
                   icon: Icons.security_rounded,
                   title: 'Privacy Settings',
-                  subtitle: 'Manage your data',
+                  subtitle: privacyEnabled ? 'Enabled' : 'Disabled',
                   color: Color(0xFFB5C7F7),
-                  onTap: () {},
+                  onTap: _togglePrivacy,
+                  trailing: Switch(
+                    value: privacyEnabled,
+                    onChanged: (value) => _togglePrivacy(),
+                    activeColor: Color(0xFF22223B),
+                  ),
                 ),
                 SizedBox(height: 12),
                 _ComicSettingCard(
@@ -214,7 +368,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   title: 'Help & Support',
                   subtitle: 'Get assistance',
                   color: Color(0xFFE8D5C4),
-                  onTap: () {},
+                  onTap: _showHelpSupport,
                 ),
               ],
             ),
@@ -246,7 +400,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     icon: Icons.edit_rounded,
                     label: 'Edit Profile',
                     color: Color(0xFFF9E79F),
-                    onTap: () {},
+                    onTap: _editProfile,
                   ),
                 ),
                 SizedBox(width: 16),
@@ -255,7 +409,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     icon: Icons.share_rounded,
                     label: 'Share App',
                     color: Color(0xFFD6EAF8),
-                    onTap: () {},
+                    onTap: _shareApp,
                   ),
                 ),
                 SizedBox(width: 16),
@@ -391,6 +545,7 @@ class _ComicSettingCard extends StatelessWidget {
   final String subtitle;
   final Color color;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   const _ComicSettingCard({
     required this.icon,
@@ -398,6 +553,7 @@ class _ComicSettingCard extends StatelessWidget {
     required this.subtitle,
     required this.color,
     required this.onTap,
+    this.trailing,
   });
 
   @override
@@ -443,7 +599,8 @@ class _ComicSettingCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF22223B)),
+            trailing ??
+                Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF22223B)),
           ],
         ),
       ),

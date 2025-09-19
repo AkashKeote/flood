@@ -10,7 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'SplashScreen.dart';
 import 'UserSetupPage.dart';
 import 'user_service.dart';
-import 'fastapi_flood_service.dart';
+import 'flood_prediction_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,9 +47,9 @@ class FloodManagementApp extends StatelessWidget {
         ),
         textTheme: GoogleFonts.poppinsTextTheme(
           Theme.of(context).textTheme.apply(
-                bodyColor: Color(0xFF22223B),
-                displayColor: Color(0xFF22223B),
-              ),
+            bodyColor: Color(0xFF22223B),
+            displayColor: Color(0xFF22223B),
+          ),
         ),
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.transparent,
@@ -194,21 +194,13 @@ class _LoadingScreenState extends State<LoadingScreen>
       vsync: this,
     );
 
-    _pulseAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.2,
-    ).animate(CurvedAnimation(
-      parent: _pulseController,
-      curve: Curves.easeInOut,
-    ));
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
 
-    _progressAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _progressController,
-      curve: Curves.easeInOut,
-    ));
+    _progressAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _progressController, curve: Curves.easeInOut),
+    );
 
     // Start animations
     _pulseController.repeat(reverse: true);
@@ -226,12 +218,11 @@ class _LoadingScreenState extends State<LoadingScreen>
       if (mounted) {
         // Check if user is already logged in
         final isLoggedIn = await UserService.isLoggedIn();
-        
+
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
-            builder: (context) => isLoggedIn 
-                ? const DashboardMaterial() 
-                : const UserSetupPage(),
+            builder: (context) =>
+                isLoggedIn ? const DashboardMaterial() : const UserSetupPage(),
           ),
         );
       }
@@ -254,10 +245,7 @@ class _LoadingScreenState extends State<LoadingScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF7F6F2),
-              Color(0xFFB5C7F7).withOpacity(0.1),
-            ],
+            colors: [Color(0xFFF7F6F2), Color(0xFFB5C7F7).withOpacity(0.1)],
           ),
         ),
         child: Center(
@@ -886,482 +874,6 @@ class _RecommendationCardMaterial extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class FloodPredictionScreen extends StatefulWidget {
-  const FloodPredictionScreen({super.key});
-
-  @override
-  State<FloodPredictionScreen> createState() => _FloodPredictionScreenState();
-}
-
-class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
-  String _predictionResult = 'No prediction yet.';
-  List<String> _areas = [];
-  String? _selectedArea;
-  bool _loadingAreas = false;
-  bool _predicting = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAreas();
-  }
-
-  Future<void> _loadAreas() async {
-    setState(() {
-      _loadingAreas = true;
-    });
-    try {
-      final areas = await FastApiFloodService.getAreas();
-      setState(() {
-        _areas = areas;
-        if (_areas.isNotEmpty) {
-          _selectedArea = _areas.first;
-        }
-      });
-    } catch (e) {
-      // Fallback
-      setState(() {
-        _areas = ['Andheri East'];
-        _selectedArea = 'Andheri East';
-      });
-    } finally {
-      setState(() {
-        _loadingAreas = false;
-      });
-    }
-  }
-
-  Future<void> _getPrediction() async {
-    if (_selectedArea == null) return;
-    setState(() {
-      _predicting = true;
-      _predictionResult = 'Predicting for $_selectedArea...';
-    });
-    try {
-      final res = await FastApiFloodService.predict(_selectedArea!);
-      final risk = (res['flood_risk'] ?? 'Unknown').toString();
-      final date = (res['date'] ?? '').toString();
-      final rain = (res['rainfall'] ?? 0).toString();
-      final matched = (res['matched_area'] ?? _selectedArea).toString();
-      final score = (res['match_score'] ?? 0).toString();
-      setState(() {
-        _predictionResult = 'City: '+matched+'\nDate: '+date+'\nFlood risk: '+risk+'\nRainfall: '+rain+' mm\nMatch score: '+score+'%';
-      });
-    } catch (e) {
-      setState(() {
-        _predictionResult = 'Error: '+e.toString();
-      });
-    } finally {
-      setState(() {
-        _predicting = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF7F6F2),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 24.0),
-              child: Text(
-                'AI Flood Prediction\nSmart Analysis',
-                style: GoogleFonts.poppins(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF22223B),
-                ),
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                children: const [
-                  _ComicStatCard(
-                    title: 'AI Confidence',
-                    value: '85%',
-                    color: Color(0xFFF9E79F),
-                    icon: Icons.psychology_rounded,
-                  ),
-                  SizedBox(width: 16),
-                  _ComicStatCard(
-                    title: 'Data Points',
-                    value: '1,247',
-                    color: Color(0xFFD6EAF8),
-                    icon: Icons.analytics_rounded,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // City/Region selector
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.08),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Select City/Region',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF22223B),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (_loadingAreas)
-                      const Center(child: CircularProgressIndicator())
-                    else
-                      DropdownButtonFormField<String>(
-                        value: _selectedArea,
-                        items: _areas
-                            .map((a) => DropdownMenuItem<String>(
-                                  value: a,
-                                  child: Text(a),
-                                ))
-                            .toList(),
-                        onChanged: (v) => setState(() => _selectedArea = v),
-                        decoration: const InputDecoration(
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.location_city),
-                          labelText: 'City',
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0),
-              child: Wrap(
-                spacing: 10,
-                children: const [
-                  _ComicChip(label: 'Weather', color: Color(0xFFD6EAF8)),
-                  _ComicChip(label: 'Rainfall', color: Color(0xFFF9E79F)),
-                  _ComicChip(label: 'Drainage', color: Color(0xFFB5C7F7)),
-                  _ComicChip(label: 'History', color: Color(0xFFE8D5C4)),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 28),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.08),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: const [
-                        Icon(Icons.auto_awesome, color: Color(0xFFB5C7F7), size: 28),
-                        SizedBox(width: 12),
-                        Text(
-                          'AI Prediction Result',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF22223B),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF7F6F2),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        _predictionResult,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Color(0xFF22223B),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _ComicButton(
-                      onPressed: _predicting || _selectedArea == null ? null : () { _getPrediction(); },
-                      label: 'Get AI Prediction',
-                      color: const Color(0xFFB5C7F7),
-                      icon: Icons.psychology_rounded,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 28),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18.0),
-              child: Text(
-                'Prediction Features',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF22223B),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 14),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Column(
-                children: const [
-                  _ComicFeatureCard(
-                    icon: Icons.water_drop_rounded,
-                    title: 'Water Level Analysis',
-                    subtitle: 'Real-time monitoring',
-                    color: Color(0xFFD6EAF8),
-                  ),
-                  SizedBox(height: 12),
-                  _ComicFeatureCard(
-                    icon: Icons.cloud_rounded,
-                    title: 'Weather Integration',
-                    subtitle: 'Rainfall prediction',
-                    color: Color(0xFFF9E79F),
-                  ),
-                  SizedBox(height: 12),
-                  _ComicFeatureCard(
-                    icon: Icons.history_rounded,
-                    title: 'Historical Data',
-                    subtitle: 'Pattern recognition',
-                    color: Color(0xFFE8D5C4),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ComicStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final Color color;
-  final IconData icon;
-
-  const _ComicStatCard({
-    required this.title,
-    required this.value,
-    required this.color,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: const Color(0xFF22223B), size: 32),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF22223B),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: const TextStyle(fontSize: 18, color: Color(0xFF22223B)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ComicChip extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _ComicChip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Chip(
-      label: Text(label, style: const TextStyle(color: Color(0xFF22223B))),
-      backgroundColor: color,
-      shape: const StadiumBorder(),
-    );
-  }
-}
-
-class _ComicButton extends StatelessWidget {
-  final VoidCallback? onPressed;
-  final String label;
-  final Color color;
-  final IconData icon;
-
-  const _ComicButton({
-    required this.onPressed,
-    required this.label,
-    required this.color,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final bool disabled = onPressed == null;
-    return GestureDetector(
-      onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-        decoration: BoxDecoration(
-          color: disabled ? color.withOpacity(0.5) : color,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: const Color(0xFF22223B), size: 24),
-            const SizedBox(width: 8),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF22223B),
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ComicFeatureCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-
-  const _ComicFeatureCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF22223B), size: 32),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF22223B),
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: const Color(0xFF22223B).withOpacity(0.7),
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

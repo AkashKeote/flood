@@ -6,6 +6,8 @@ import 'dart:ui_web' as ui_web;
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'backend_api_service.dart';
+import 'mumbai_areas.dart';
+import 'user_service.dart';
 
 class RoutePage extends StatefulWidget {
   const RoutePage({super.key});
@@ -16,6 +18,7 @@ class RoutePage extends StatefulWidget {
 
 class _RoutePageState extends State<RoutePage> {
   final TextEditingController _locationController = TextEditingController();
+  String? _selectedArea;
   bool _isLoading = false;
   final List<EvacuationRoute> _routes = [];
   String? _matchedLocation;
@@ -25,7 +28,7 @@ class _RoutePageState extends State<RoutePage> {
   final bool _showPOIs = false;
   final String _selectedMapStyle = 'OpenStreetMap';
   String? _iframeViewType;
-  
+
   // Individual POI category toggles
   final Map<String, bool> _selectedPOICategories = {
     'hospital': false,
@@ -42,24 +45,72 @@ class _RoutePageState extends State<RoutePage> {
     'bus_station': false,
     'train_station': false,
   };
-  
+
   // POI Categories matching Streamlit implementation exactly
   final Map<String, Map<String, dynamic>> _poiCategories = {
-    'hospital': {'icon': Icons.local_hospital, 'color': Colors.red, 'name': 'Hospital (222)'},
-    'police': {'icon': Icons.local_police, 'color': Colors.blue[800]!, 'name': 'Police (16)'},
-    'fire_station': {'icon': Icons.fire_truck, 'color': Colors.red[700]!, 'name': 'Fire Station (6)'},
-    'pharmacy': {'icon': Icons.medication, 'color': Colors.green[600]!, 'name': 'Pharmacy (35)'},
-    'school': {'icon': Icons.school, 'color': Colors.blue[600]!, 'name': 'School (107)'},
-    'fuel': {'icon': Icons.local_gas_station, 'color': Colors.orange[700]!, 'name': 'Fuel (27)'},
-    'bank': {'icon': Icons.account_balance, 'color': Colors.indigo[700]!, 'name': 'Bank (124)'},
+    'hospital': {
+      'icon': Icons.local_hospital,
+      'color': Colors.red,
+      'name': 'Hospital (222)',
+    },
+    'police': {
+      'icon': Icons.local_police,
+      'color': Colors.blue[800]!,
+      'name': 'Police (16)',
+    },
+    'fire_station': {
+      'icon': Icons.fire_truck,
+      'color': Colors.red[700]!,
+      'name': 'Fire Station (6)',
+    },
+    'pharmacy': {
+      'icon': Icons.medication,
+      'color': Colors.green[600]!,
+      'name': 'Pharmacy (35)',
+    },
+    'school': {
+      'icon': Icons.school,
+      'color': Colors.blue[600]!,
+      'name': 'School (107)',
+    },
+    'fuel': {
+      'icon': Icons.local_gas_station,
+      'color': Colors.orange[700]!,
+      'name': 'Fuel (27)',
+    },
+    'bank': {
+      'icon': Icons.account_balance,
+      'color': Colors.indigo[700]!,
+      'name': 'Bank (124)',
+    },
     'atm': {'icon': Icons.atm, 'color': Colors.teal[600]!, 'name': 'Atm (60)'},
-    'restaurant': {'icon': Icons.restaurant, 'color': Colors.brown[600]!, 'name': 'Restaurant (141)'},
-    'market': {'icon': Icons.storefront, 'color': Colors.purple[600]!, 'name': 'Market (35)'},
-    'water_tower': {'icon': Icons.water_drop, 'color': Colors.cyan[600]!, 'name': 'Water Tower (4)'},
-    'bus_station': {'icon': Icons.directions_bus, 'color': Colors.blue[900]!, 'name': 'Bus Station (26)'},
-    'train_station': {'icon': Icons.train, 'color': Colors.grey[700]!, 'name': 'Train Station (42)'},
+    'restaurant': {
+      'icon': Icons.restaurant,
+      'color': Colors.brown[600]!,
+      'name': 'Restaurant (141)',
+    },
+    'market': {
+      'icon': Icons.storefront,
+      'color': Colors.purple[600]!,
+      'name': 'Market (35)',
+    },
+    'water_tower': {
+      'icon': Icons.water_drop,
+      'color': Colors.cyan[600]!,
+      'name': 'Water Tower (4)',
+    },
+    'bus_station': {
+      'icon': Icons.directions_bus,
+      'color': Colors.blue[900]!,
+      'name': 'Bus Station (26)',
+    },
+    'train_station': {
+      'icon': Icons.train,
+      'color': Colors.grey[700]!,
+      'name': 'Train Station (42)',
+    },
   };
-  
+
   // Map style options
   final Map<String, Map<String, String>> _mapStyles = {
     'OpenStreetMap': {
@@ -76,21 +127,47 @@ class _RoutePageState extends State<RoutePage> {
     },
     'Toner': {
       'name': '📰 Toner',
-      'url': 'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png',
+      'url':
+          'https://tiles.stadiamaps.com/tiles/stamen_toner/{z}/{x}/{y}{r}.png',
     },
     'Terrain': {
       'name': '🏔️ Terrain',
-      'url': 'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',
+      'url':
+          'https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}{r}.png',
     },
   };
 
   // Sample Mumbai areas for suggestions
   final List<String> _mumbaiAreas = [
-    'andheri west', 'andheri east', 'bandra', 'colaba', 'dadar', 'powai',
-    'malad', 'borivali', 'thane', 'kurla', 'santa cruz', 'jogeshwari',
-    'goregaon', 'kandivali', 'mulund', 'bhandup', 'chembur', 'ghatkopar',
-    'vikhroli', 'khar', 'juhu', 'versova', 'worli', 'lower parel',
-    'matunga', 'king circle', 'sion', 'mahim', 'mumbai central'
+    'andheri west',
+    'andheri east',
+    'bandra',
+    'colaba',
+    'dadar',
+    'powai',
+    'malad',
+    'borivali',
+    'thane',
+    'kurla',
+    'santa cruz',
+    'jogeshwari',
+    'goregaon',
+    'kandivali',
+    'mulund',
+    'bhandup',
+    'chembur',
+    'ghatkopar',
+    'vikhroli',
+    'khar',
+    'juhu',
+    'versova',
+    'worli',
+    'lower parel',
+    'matunga',
+    'king circle',
+    'sion',
+    'mahim',
+    'mumbai central',
   ];
 
   // Sample flood risk data
@@ -158,90 +235,282 @@ class _RoutePageState extends State<RoutePage> {
     'mahim': LatLng(19.0410, 72.8420),
     'mumbai central': LatLng(18.9685, 72.8205),
   };
-  
+
   // Sample POI data for Mumbai areas - matching Streamlit categories
   List<Map<String, dynamic>> _getPOIMarkers() {
     return [
       // Hospitals (222)
-      {'type': 'hospital', 'name': 'Lilavati Hospital', 'coord': LatLng(19.0596, 72.8295)},
-      {'type': 'hospital', 'name': 'Kokilaben Hospital', 'coord': LatLng(19.1136, 72.8697)},
-      {'type': 'hospital', 'name': 'Hinduja Hospital', 'coord': LatLng(19.0410, 72.8420)},
-      {'type': 'hospital', 'name': 'Fortis Hospital', 'coord': LatLng(19.1875, 72.8449)},
-      {'type': 'hospital', 'name': 'Breach Candy Hospital', 'coord': LatLng(18.9687, 72.8095)},
-      
+      {
+        'type': 'hospital',
+        'name': 'Lilavati Hospital',
+        'coord': LatLng(19.0596, 72.8295),
+      },
+      {
+        'type': 'hospital',
+        'name': 'Kokilaben Hospital',
+        'coord': LatLng(19.1136, 72.8697),
+      },
+      {
+        'type': 'hospital',
+        'name': 'Hinduja Hospital',
+        'coord': LatLng(19.0410, 72.8420),
+      },
+      {
+        'type': 'hospital',
+        'name': 'Fortis Hospital',
+        'coord': LatLng(19.1875, 72.8449),
+      },
+      {
+        'type': 'hospital',
+        'name': 'Breach Candy Hospital',
+        'coord': LatLng(18.9687, 72.8095),
+      },
+
       // Police (16)
-      {'type': 'police', 'name': 'Andheri Police Station', 'coord': LatLng(19.1197, 72.8464)},
-      {'type': 'police', 'name': 'Bandra Police Station', 'coord': LatLng(19.0550, 72.8300)},
-      {'type': 'police', 'name': 'Colaba Police Station', 'coord': LatLng(18.9100, 72.8150)},
-      {'type': 'police', 'name': 'Worli Police Station', 'coord': LatLng(19.0177, 72.8134)},
-      
+      {
+        'type': 'police',
+        'name': 'Andheri Police Station',
+        'coord': LatLng(19.1197, 72.8464),
+      },
+      {
+        'type': 'police',
+        'name': 'Bandra Police Station',
+        'coord': LatLng(19.0550, 72.8300),
+      },
+      {
+        'type': 'police',
+        'name': 'Colaba Police Station',
+        'coord': LatLng(18.9100, 72.8150),
+      },
+      {
+        'type': 'police',
+        'name': 'Worli Police Station',
+        'coord': LatLng(19.0177, 72.8134),
+      },
+
       // Fire Station (6)
-      {'type': 'fire_station', 'name': 'Andheri Fire Station', 'coord': LatLng(19.1180, 72.8500)},
-      {'type': 'fire_station', 'name': 'Dadar Fire Station', 'coord': LatLng(19.0200, 72.8500)},
-      {'type': 'fire_station', 'name': 'Bandra Fire Station', 'coord': LatLng(19.0650, 72.8350)},
-      
+      {
+        'type': 'fire_station',
+        'name': 'Andheri Fire Station',
+        'coord': LatLng(19.1180, 72.8500),
+      },
+      {
+        'type': 'fire_station',
+        'name': 'Dadar Fire Station',
+        'coord': LatLng(19.0200, 72.8500),
+      },
+      {
+        'type': 'fire_station',
+        'name': 'Bandra Fire Station',
+        'coord': LatLng(19.0650, 72.8350),
+      },
+
       // Pharmacy (35)
-      {'type': 'pharmacy', 'name': 'Apollo Pharmacy', 'coord': LatLng(19.0700, 72.8400)},
-      {'type': 'pharmacy', 'name': 'MedPlus Pharmacy', 'coord': LatLng(19.1200, 72.8700)},
-      {'type': 'pharmacy', 'name': 'Wellness Pharmacy', 'coord': LatLng(19.0300, 72.8600)},
-      
+      {
+        'type': 'pharmacy',
+        'name': 'Apollo Pharmacy',
+        'coord': LatLng(19.0700, 72.8400),
+      },
+      {
+        'type': 'pharmacy',
+        'name': 'MedPlus Pharmacy',
+        'coord': LatLng(19.1200, 72.8700),
+      },
+      {
+        'type': 'pharmacy',
+        'name': 'Wellness Pharmacy',
+        'coord': LatLng(19.0300, 72.8600),
+      },
+
       // School (107)
-      {'type': 'school', 'name': 'St. Xavier\'s School', 'coord': LatLng(19.0178, 72.8478)},
-      {'type': 'school', 'name': 'Bombay Scottish School', 'coord': LatLng(19.1176, 72.9060)},
-      {'type': 'school', 'name': 'Cathedral School', 'coord': LatLng(18.9300, 72.8200)},
-      {'type': 'school', 'name': 'Ryan International', 'coord': LatLng(19.1400, 72.8800)},
-      
+      {
+        'type': 'school',
+        'name': 'St. Xavier\'s School',
+        'coord': LatLng(19.0178, 72.8478),
+      },
+      {
+        'type': 'school',
+        'name': 'Bombay Scottish School',
+        'coord': LatLng(19.1176, 72.9060),
+      },
+      {
+        'type': 'school',
+        'name': 'Cathedral School',
+        'coord': LatLng(18.9300, 72.8200),
+      },
+      {
+        'type': 'school',
+        'name': 'Ryan International',
+        'coord': LatLng(19.1400, 72.8800),
+      },
+
       // Fuel (27)
-      {'type': 'fuel', 'name': 'HP Petrol Pump', 'coord': LatLng(19.1875, 72.8449)},
-      {'type': 'fuel', 'name': 'BPCL Fuel Station', 'coord': LatLng(19.0896, 72.8417)},
-      {'type': 'fuel', 'name': 'IOC Petrol Pump', 'coord': LatLng(19.0500, 72.8300)},
-      {'type': 'fuel', 'name': 'Shell Petrol Pump', 'coord': LatLng(19.1600, 72.8500)},
-      
+      {
+        'type': 'fuel',
+        'name': 'HP Petrol Pump',
+        'coord': LatLng(19.1875, 72.8449),
+      },
+      {
+        'type': 'fuel',
+        'name': 'BPCL Fuel Station',
+        'coord': LatLng(19.0896, 72.8417),
+      },
+      {
+        'type': 'fuel',
+        'name': 'IOC Petrol Pump',
+        'coord': LatLng(19.0500, 72.8300),
+      },
+      {
+        'type': 'fuel',
+        'name': 'Shell Petrol Pump',
+        'coord': LatLng(19.1600, 72.8500),
+      },
+
       // Bank (124)
-      {'type': 'bank', 'name': 'HDFC Bank Bandra', 'coord': LatLng(19.0600, 72.8280)},
-      {'type': 'bank', 'name': 'SBI Andheri', 'coord': LatLng(19.1150, 72.8650)},
+      {
+        'type': 'bank',
+        'name': 'HDFC Bank Bandra',
+        'coord': LatLng(19.0600, 72.8280),
+      },
+      {
+        'type': 'bank',
+        'name': 'SBI Andheri',
+        'coord': LatLng(19.1150, 72.8650),
+      },
       {'type': 'bank', 'name': 'ICICI Bank', 'coord': LatLng(19.0400, 72.8450)},
       {'type': 'bank', 'name': 'Axis Bank', 'coord': LatLng(19.1000, 72.8600)},
       {'type': 'bank', 'name': 'Kotak Bank', 'coord': LatLng(18.9500, 72.8200)},
-      
+
       // ATM (60)
       {'type': 'atm', 'name': 'HDFC ATM', 'coord': LatLng(19.0580, 72.8320)},
       {'type': 'atm', 'name': 'SBI ATM', 'coord': LatLng(19.1180, 72.8680)},
       {'type': 'atm', 'name': 'ICICI ATM', 'coord': LatLng(19.0350, 72.8480)},
       {'type': 'atm', 'name': 'Axis ATM', 'coord': LatLng(19.1050, 72.8650)},
-      
+
       // Restaurant (141)
-      {'type': 'restaurant', 'name': 'Trishna Restaurant', 'coord': LatLng(18.9200, 72.8300)},
-      {'type': 'restaurant', 'name': 'Bademiya', 'coord': LatLng(18.9150, 72.8250)},
-      {'type': 'restaurant', 'name': 'Cafe Mocha', 'coord': LatLng(19.0650, 72.8350)},
-      {'type': 'restaurant', 'name': 'McDonald\'s', 'coord': LatLng(19.1200, 72.8700)},
-      {'type': 'restaurant', 'name': 'Burger King', 'coord': LatLng(19.0800, 72.8500)},
-      
+      {
+        'type': 'restaurant',
+        'name': 'Trishna Restaurant',
+        'coord': LatLng(18.9200, 72.8300),
+      },
+      {
+        'type': 'restaurant',
+        'name': 'Bademiya',
+        'coord': LatLng(18.9150, 72.8250),
+      },
+      {
+        'type': 'restaurant',
+        'name': 'Cafe Mocha',
+        'coord': LatLng(19.0650, 72.8350),
+      },
+      {
+        'type': 'restaurant',
+        'name': 'McDonald\'s',
+        'coord': LatLng(19.1200, 72.8700),
+      },
+      {
+        'type': 'restaurant',
+        'name': 'Burger King',
+        'coord': LatLng(19.0800, 72.8500),
+      },
+
       // Market (35)
-      {'type': 'market', 'name': 'Crawford Market', 'coord': LatLng(18.9487, 72.8348)},
-      {'type': 'market', 'name': 'Linking Road Market', 'coord': LatLng(19.0550, 72.8300)},
-      {'type': 'market', 'name': 'Hill Road Market', 'coord': LatLng(19.0600, 72.8280)},
-      {'type': 'market', 'name': 'Palladium Mall', 'coord': LatLng(19.0969, 72.8302)},
-      
+      {
+        'type': 'market',
+        'name': 'Crawford Market',
+        'coord': LatLng(18.9487, 72.8348),
+      },
+      {
+        'type': 'market',
+        'name': 'Linking Road Market',
+        'coord': LatLng(19.0550, 72.8300),
+      },
+      {
+        'type': 'market',
+        'name': 'Hill Road Market',
+        'coord': LatLng(19.0600, 72.8280),
+      },
+      {
+        'type': 'market',
+        'name': 'Palladium Mall',
+        'coord': LatLng(19.0969, 72.8302),
+      },
+
       // Water Tower (4)
-      {'type': 'water_tower', 'name': 'Powai Water Tank', 'coord': LatLng(19.1200, 72.9100)},
-      {'type': 'water_tower', 'name': 'Andheri Water Tower', 'coord': LatLng(19.1150, 72.8750)},
-      {'type': 'water_tower', 'name': 'Bandra Water Tank', 'coord': LatLng(19.0650, 72.8400)},
-      {'type': 'water_tower', 'name': 'Worli Water Tower', 'coord': LatLng(19.0200, 72.8150)},
-      
+      {
+        'type': 'water_tower',
+        'name': 'Powai Water Tank',
+        'coord': LatLng(19.1200, 72.9100),
+      },
+      {
+        'type': 'water_tower',
+        'name': 'Andheri Water Tower',
+        'coord': LatLng(19.1150, 72.8750),
+      },
+      {
+        'type': 'water_tower',
+        'name': 'Bandra Water Tank',
+        'coord': LatLng(19.0650, 72.8400),
+      },
+      {
+        'type': 'water_tower',
+        'name': 'Worli Water Tower',
+        'coord': LatLng(19.0200, 72.8150),
+      },
+
       // Bus Station (26)
-      {'type': 'bus_station', 'name': 'Andheri Bus Station', 'coord': LatLng(19.1100, 72.8600)},
-      {'type': 'bus_station', 'name': 'Borivali Bus Depot', 'coord': LatLng(19.2307, 72.8567)},
-      {'type': 'bus_station', 'name': 'BEST Bus Depot', 'coord': LatLng(19.0400, 72.8500)},
-      {'type': 'bus_station', 'name': 'Bandra Bus Station', 'coord': LatLng(19.0550, 72.8350)},
-      
+      {
+        'type': 'bus_station',
+        'name': 'Andheri Bus Station',
+        'coord': LatLng(19.1100, 72.8600),
+      },
+      {
+        'type': 'bus_station',
+        'name': 'Borivali Bus Depot',
+        'coord': LatLng(19.2307, 72.8567),
+      },
+      {
+        'type': 'bus_station',
+        'name': 'BEST Bus Depot',
+        'coord': LatLng(19.0400, 72.8500),
+      },
+      {
+        'type': 'bus_station',
+        'name': 'Bandra Bus Station',
+        'coord': LatLng(19.0550, 72.8350),
+      },
+
       // Train Station (42)
-      {'type': 'train_station', 'name': 'Mumbai Central', 'coord': LatLng(18.9685, 72.8205)},
-      {'type': 'train_station', 'name': 'Andheri Railway Station', 'coord': LatLng(19.1197, 72.8464)},
-      {'type': 'train_station', 'name': 'Bandra Railway Station', 'coord': LatLng(19.0544, 72.8406)},
-      {'type': 'train_station', 'name': 'Dadar Railway Station', 'coord': LatLng(19.0178, 72.8478)},
-      {'type': 'train_station', 'name': 'Borivali Railway Station', 'coord': LatLng(19.2307, 72.8567)},
-      {'type': 'train_station', 'name': 'Thane Railway Station', 'coord': LatLng(19.2183, 72.9781)},
+      {
+        'type': 'train_station',
+        'name': 'Mumbai Central',
+        'coord': LatLng(18.9685, 72.8205),
+      },
+      {
+        'type': 'train_station',
+        'name': 'Andheri Railway Station',
+        'coord': LatLng(19.1197, 72.8464),
+      },
+      {
+        'type': 'train_station',
+        'name': 'Bandra Railway Station',
+        'coord': LatLng(19.0544, 72.8406),
+      },
+      {
+        'type': 'train_station',
+        'name': 'Dadar Railway Station',
+        'coord': LatLng(19.0178, 72.8478),
+      },
+      {
+        'type': 'train_station',
+        'name': 'Borivali Railway Station',
+        'coord': LatLng(19.2307, 72.8567),
+      },
+      {
+        'type': 'train_station',
+        'name': 'Thane Railway Station',
+        'coord': LatLng(19.2183, 72.9781),
+      },
     ];
   }
 
@@ -251,9 +520,27 @@ class _RoutePageState extends State<RoutePage> {
     super.dispose();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _loadUserArea();
+  }
+
+  Future<void> _loadUserArea() async {
+    final data = await UserService.getUserData();
+    final area = data?['area']?.toString();
+    if (area != null && area.isNotEmpty) {
+      setState(() {
+        _selectedArea = area;
+        _locationController.text = area;
+      });
+    }
+  }
+
   // Find evacuation routes using backend API
   Future<void> _findRoutes() async {
-    if (_locationController.text.trim().isEmpty) return;
+    final regionInput = (_selectedArea ?? _locationController.text).trim();
+    if (regionInput.isEmpty) return;
 
     setState(() {
       _isLoading = true;
@@ -261,18 +548,18 @@ class _RoutePageState extends State<RoutePage> {
     });
 
     try {
-      String query = _locationController.text.trim();
-      
+      String query = regionInput;
+
       // Call backend API to get evacuation routes
       final response = await BackendApiService.getEvacuationRoutes(
         region: query,
         routeCount: _numRoutes,
       );
 
-        if (response['success'] == true) {
+      if (response['success'] == true) {
         _matchedLocation = response['matched_region'] ?? query;
         _matchScore = response['match_score'] ?? 100;
-        
+
         // Show data source information
         String dataSource = response['data_source'] ?? 'Unknown';
         if (mounted) {
@@ -281,7 +568,9 @@ class _RoutePageState extends State<RoutePage> {
               content: Row(
                 children: [
                   Icon(
-                    dataSource.contains('llload.py') ? Icons.auto_awesome : Icons.storage,
+                    dataSource.contains('llload.py')
+                        ? Icons.auto_awesome
+                        : Icons.storage,
                     color: Colors.white,
                     size: 16,
                   ),
@@ -294,7 +583,9 @@ class _RoutePageState extends State<RoutePage> {
                   ),
                 ],
               ),
-              backgroundColor: dataSource.contains('llload.py') ? Colors.green : Colors.orange,
+              backgroundColor: dataSource.contains('llload.py')
+                  ? Colors.green
+                  : Colors.orange,
               duration: Duration(seconds: 3),
             ),
           );
@@ -306,14 +597,18 @@ class _RoutePageState extends State<RoutePage> {
 
         for (int i = 0; i < routesData.length; i++) {
           var routeData = routesData[i];
-          _routes.add(EvacuationRoute(
-            id: i + 1,
-            destination: routeData['destination'] ?? 'Unknown',
-            distanceKm: (routeData['distance_km'] ?? 0.0).toDouble(),
-            estimatedTimeMinutes: _parseTimeMinutes(routeData['eta'] ?? '0 min'),
-            riskLevel: routeData['risk_level'] ?? 'unknown',
-            routeColor: _getRouteColor(i),
-          ));
+          _routes.add(
+            EvacuationRoute(
+              id: i + 1,
+              destination: routeData['destination'] ?? 'Unknown',
+              distanceKm: (routeData['distance_km'] ?? 0.0).toDouble(),
+              estimatedTimeMinutes: _parseTimeMinutes(
+                routeData['eta'] ?? '0 min',
+              ),
+              riskLevel: routeData['risk_level'] ?? 'unknown',
+              routeColor: _getRouteColor(i),
+            ),
+          );
         }
 
         _routes.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
@@ -367,7 +662,7 @@ class _RoutePageState extends State<RoutePage> {
     if (query == target) return 100;
     if (target.contains(query)) return 80;
     if (query.contains(target)) return 75;
-    
+
     // Simple character-based similarity
     int matches = 0;
     int minLength = min(query.length, target.length);
@@ -410,25 +705,25 @@ class _RoutePageState extends State<RoutePage> {
   // Generate route points between two coordinates
   List<LatLng> _generateRoutePoints(LatLng start, LatLng end) {
     List<LatLng> points = [start];
-    
+
     // Add intermediate points to simulate a more realistic route
     double latDiff = end.latitude - start.latitude;
     double lngDiff = end.longitude - start.longitude;
-    
+
     // Add 2-4 intermediate waypoints
     int numPoints = Random().nextInt(3) + 2;
-    
+
     for (int i = 1; i < numPoints; i++) {
       double ratio = i / numPoints;
       // Add some randomness to make the route look more realistic
       double randomOffset = (Random().nextDouble() - 0.5) * 0.01;
-      
+
       double lat = start.latitude + (latDiff * ratio) + randomOffset;
       double lng = start.longitude + (lngDiff * ratio) + randomOffset;
-      
+
       points.add(LatLng(lat, lng));
     }
-    
+
     points.add(end);
     return points;
   }
@@ -634,38 +929,81 @@ class _RoutePageState extends State<RoutePage> {
                       ),
                     ),
                     SizedBox(height: 16),
-                    TextField(
-                      controller: _locationController,
+                    // Dropdown styled like UserSetupPage
+                    DropdownButtonFormField<String>(
+                      value: MumbaiAreas.list.contains(_selectedArea)
+                          ? _selectedArea
+                          : null,
                       decoration: InputDecoration(
-                        hintText: 'Type your area name (e.g., Andheri, Bandra)',
-                        prefixIcon: Icon(Icons.location_on, color: Color(0xFFB5C7F7)),
+                        hintText: 'Select your area in Mumbai',
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFB5C7F7),
+                          ),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(15),
-                          borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFB5C7F7),
+                            width: 2,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF7F6F2),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.location_on,
+                          color: Color(0xFFB5C7F7),
                         ),
                       ),
+                      items: MumbaiAreas.list.map((String ward) {
+                        return DropdownMenuItem<String>(
+                          value: ward,
+                          child: Text(
+                            ward,
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: const Color(0xFF22223B),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedArea = newValue;
+                          _locationController.text = newValue ?? '';
+                        });
+                      },
                     ),
                     SizedBox(height: 16),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: _isLoading ? null : _findRoutes,
-                        icon: _isLoading 
+                        icon: _isLoading
                             ? SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
                                 ),
                               )
                             : Icon(Icons.search, color: Colors.white),
                         label: Text(
-                          _isLoading ? 'Finding Routes...' : 'Find Evacuation Routes',
+                          _isLoading
+                              ? 'Finding Routes...'
+                              : 'Find Evacuation Routes',
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -687,7 +1025,8 @@ class _RoutePageState extends State<RoutePage> {
             ),
 
             // Quick Suggestions
-            if (_locationController.text.isNotEmpty && _locationController.text.length >= 2)
+            if (_locationController.text.isNotEmpty &&
+                _locationController.text.length >= 2)
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -706,30 +1045,48 @@ class _RoutePageState extends State<RoutePage> {
                       spacing: 8,
                       runSpacing: 8,
                       children: _mumbaiAreas
-                          .where((area) => area.toLowerCase().contains(_locationController.text.toLowerCase()))
+                          .where(
+                            (area) => area.toLowerCase().contains(
+                              _locationController.text.toLowerCase(),
+                            ),
+                          )
                           .take(6)
-                          .map((area) => GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _locationController.text = area;
-                                  });
-                                },
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                  decoration: BoxDecoration(
-                                    color: Color(0xFFB5C7F7).withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: Color(0xFFB5C7F7).withOpacity(0.5)),
-                                  ),
-                                  child: Text(
-                                    area.split(' ').map((word) => word[0].toUpperCase() + word.substring(1)).join(' '),
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      color: Color(0xFF22223B),
-                                    ),
+                          .map(
+                            (area) => GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _locationController.text = area;
+                                });
+                              },
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Color(0xFFB5C7F7).withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Color(0xFFB5C7F7).withOpacity(0.5),
                                   ),
                                 ),
-                              ))
+                                child: Text(
+                                  area
+                                      .split(' ')
+                                      .map(
+                                        (word) =>
+                                            word[0].toUpperCase() +
+                                            word.substring(1),
+                                      )
+                                      .join(' '),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Color(0xFF22223B),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
                           .toList(),
                     ),
                   ],
@@ -744,7 +1101,9 @@ class _RoutePageState extends State<RoutePage> {
                   width: double.infinity,
                   padding: EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: _matchScore == 100 ? Colors.green[50] : Colors.orange[50],
+                    color: _matchScore == 100
+                        ? Colors.green[50]
+                        : Colors.orange[50],
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: _matchScore == 100 ? Colors.green : Colors.orange,
@@ -757,8 +1116,12 @@ class _RoutePageState extends State<RoutePage> {
                       Row(
                         children: [
                           Icon(
-                            _matchScore == 100 ? Icons.check_circle : Icons.info,
-                            color: _matchScore == 100 ? Colors.green : Colors.orange,
+                            _matchScore == 100
+                                ? Icons.check_circle
+                                : Icons.info,
+                            color: _matchScore == 100
+                                ? Colors.green
+                                : Colors.orange,
                           ),
                           SizedBox(width: 12),
                           Expanded(
@@ -766,7 +1129,7 @@ class _RoutePageState extends State<RoutePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _matchScore == 100 
+                                  _matchScore == 100
                                       ? 'Exact match found!'
                                       : 'Using closest match',
                                   style: GoogleFonts.poppins(
@@ -790,14 +1153,21 @@ class _RoutePageState extends State<RoutePage> {
                       SizedBox(height: 12),
                       Row(
                         children: [
-                          Icon(Icons.warning_amber, color: _getRiskColor(_floodRiskData[_matchedLocation!] ?? 'unknown')),
+                          Icon(
+                            Icons.warning_amber,
+                            color: _getRiskColor(
+                              _floodRiskData[_matchedLocation!] ?? 'unknown',
+                            ),
+                          ),
                           SizedBox(width: 8),
                           Text(
                             'Current Risk Level: ${(_floodRiskData[_matchedLocation!] ?? 'unknown').toUpperCase()}',
                             style: GoogleFonts.poppins(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
-                              color: _getRiskColor(_floodRiskData[_matchedLocation!] ?? 'unknown'),
+                              color: _getRiskColor(
+                                _floodRiskData[_matchedLocation!] ?? 'unknown',
+                              ),
                             ),
                           ),
                         ],
@@ -845,7 +1215,10 @@ class _RoutePageState extends State<RoutePage> {
                             children: [
                               Text(
                                 'Avg Distance',
-                                style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
                               ),
                               Text(
                                 '${(_routes.map((r) => r.distanceKm).reduce((a, b) => a + b) / _routes.length).toStringAsFixed(1)} km',
@@ -878,7 +1251,10 @@ class _RoutePageState extends State<RoutePage> {
                             children: [
                               Text(
                                 'Avg Time',
-                                style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
                               ),
                               Text(
                                 '${(_routes.map((r) => r.estimatedTimeMinutes).reduce((a, b) => a + b) / _routes.length).toStringAsFixed(0)} min',
@@ -911,7 +1287,10 @@ class _RoutePageState extends State<RoutePage> {
                             children: [
                               Text(
                                 'Shortest',
-                                style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[600]),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
                               ),
                               Text(
                                 '${_routes.first.distanceKm.toStringAsFixed(1)} km',
@@ -935,7 +1314,10 @@ class _RoutePageState extends State<RoutePage> {
                 ...List.generate(_routes.length, (index) {
                   final route = _routes[index];
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -950,7 +1332,11 @@ class _RoutePageState extends State<RoutePage> {
                       ),
                       child: ExpansionTile(
                         tilePadding: EdgeInsets.all(20),
-                        childrenPadding: EdgeInsets.only(left: 20, right: 20, bottom: 20),
+                        childrenPadding: EdgeInsets.only(
+                          left: 20,
+                          right: 20,
+                          bottom: 20,
+                        ),
                         leading: Container(
                           width: 40,
                           height: 40,
@@ -991,13 +1377,25 @@ class _RoutePageState extends State<RoutePage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    _buildInfoRow('Distance', '${route.distanceKm.toStringAsFixed(2)} km'),
+                                    _buildInfoRow(
+                                      'Distance',
+                                      '${route.distanceKm.toStringAsFixed(2)} km',
+                                    ),
                                     SizedBox(height: 8),
-                                    _buildInfoRow('Estimated Time', '${route.estimatedTimeMinutes.toStringAsFixed(0)} minutes'),
+                                    _buildInfoRow(
+                                      'Estimated Time',
+                                      '${route.estimatedTimeMinutes.toStringAsFixed(0)} minutes',
+                                    ),
                                     SizedBox(height: 8),
-                                    _buildInfoRow('Destination Risk', route.riskLevel.toUpperCase()),
+                                    _buildInfoRow(
+                                      'Destination Risk',
+                                      route.riskLevel.toUpperCase(),
+                                    ),
                                     SizedBox(height: 8),
-                                    _buildInfoRow('Route Efficiency', '${((route.distanceKm / _routes.map((r) => r.distanceKm).reduce((a, b) => a + b)) * 100).toStringAsFixed(1)}%'),
+                                    _buildInfoRow(
+                                      'Route Efficiency',
+                                      '${((route.distanceKm / _routes.map((r) => r.distanceKm).reduce((a, b) => a + b)) * 100).toStringAsFixed(1)}%',
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1046,52 +1444,59 @@ class _RoutePageState extends State<RoutePage> {
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton(
-                            onPressed: _isLoading ? null : () {
-                              final region = _locationController.text.trim();
-                              if (region.isEmpty) {
-                                setState(() {
-                                  // _errorText = "Please enter a region name."; // Uncomment if you want error handling
-                                });
-                                return;
-                              }
-                              setState(() {
-                                // _errorText = null;
-                                _isLoading = true;
-                              });
-                              final url = "http://127.0.0.1:5000/map?region=$region";
-                              final viewType = "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
-                              // ignore: undefined_prefixed_name
-                              ui_web.platformViewRegistry.registerViewFactory(
-                                viewType,
-                                (int viewId) {
-                                  final iframe = html.IFrameElement()
-                                    ..src = url
-                                    ..style.border = 'none'
-                                    ..width = '100%'
-                                    ..height = '600';
-                                  iframe.onLoad.listen((event) {
+                            onPressed: _isLoading
+                                ? null
+                                : () {
+                                    final region = _locationController.text
+                                        .trim();
+                                    if (region.isEmpty) {
+                                      setState(() {
+                                        // _errorText = "Please enter a region name."; // Uncomment if you want error handling
+                                      });
+                                      return;
+                                    }
                                     setState(() {
-                                      _isLoading = false;
+                                      // _errorText = null;
+                                      _isLoading = true;
                                     });
-                                  });
-                                  iframe.onError.listen((event) {
+                                    final url =
+                                        "http://127.0.0.1:5000/map?region=$region";
+                                    final viewType =
+                                        "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
+                                    // ignore: undefined_prefixed_name
+                                    ui_web.platformViewRegistry
+                                        .registerViewFactory(viewType, (
+                                          int viewId,
+                                        ) {
+                                          final iframe = html.IFrameElement()
+                                            ..src = url
+                                            ..style.border = 'none'
+                                            ..width = '100%'
+                                            ..height = '600';
+                                          iframe.onLoad.listen((event) {
+                                            setState(() {
+                                              _isLoading = false;
+                                            });
+                                          });
+                                          iframe.onError.listen((event) {
+                                            setState(() {
+                                              _isLoading = false;
+                                              // _errorText = "Failed to load map. Please check the server or region name.";
+                                            });
+                                          });
+                                          return iframe;
+                                        });
                                     setState(() {
-                                      _isLoading = false;
-                                      // _errorText = "Failed to load map. Please check the server or region name.";
+                                      _iframeViewType = viewType;
                                     });
-                                  });
-                                  return iframe;
-                                },
-                              );
-                              setState(() {
-                                _iframeViewType = viewType;
-                              });
-                            },
+                                  },
                             child: _isLoading
                                 ? const SizedBox(
                                     width: 20,
                                     height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Text("Show Map"),
                           ),
@@ -1105,7 +1510,9 @@ class _RoutePageState extends State<RoutePage> {
                                 children: [
                                   HtmlElementView(viewType: _iframeViewType!),
                                   if (_isLoading)
-                                    const Center(child: CircularProgressIndicator()),
+                                    const Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
                                   // if (_errorText != null)
                                   //   Center(
                                   //     child: Text(
@@ -1140,7 +1547,11 @@ class _RoutePageState extends State<RoutePage> {
                     ),
                     child: Column(
                       children: [
-                        Icon(Icons.warning_amber, color: Colors.orange, size: 48),
+                        Icon(
+                          Icons.warning_amber,
+                          color: Colors.orange,
+                          size: 48,
+                        ),
                         SizedBox(height: 12),
                         Text(
                           'No safe evacuation routes found',
@@ -1163,7 +1574,9 @@ class _RoutePageState extends State<RoutePage> {
                     ),
                   ),
                 ),
-            ] else if (_locationController.text.isNotEmpty && _matchedLocation == null && !_isLoading)
+            ] else if (_locationController.text.isNotEmpty &&
+                _matchedLocation == null &&
+                !_isLoading)
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Container(
@@ -1276,10 +1689,7 @@ class _RoutePageState extends State<RoutePage> {
         children: [
           Text(
             service,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: Color(0xFF22223B),
-            ),
+            style: GoogleFonts.poppins(fontSize: 14, color: Color(0xFF22223B)),
           ),
           Text(
             number,
@@ -1407,31 +1817,29 @@ class _RouteMapPageState extends State<RouteMapPage> {
     try {
       // Use backend API to get evacuation map
       final htmlContent = await BackendApiService.getEvacuationMap(region);
-      
+
       final viewType = "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
       // ignore: undefined_prefixed_name
-      ui_web.platformViewRegistry.registerViewFactory(
-        viewType,
-        (int viewId) {
-          final iframe = html.IFrameElement()
-            ..srcdoc = htmlContent  // Use srcdoc instead of src for HTML content
-            ..style.border = 'none'
-            ..width = '100%'
-            ..height = '600';
-          iframe.onLoad.listen((event) {
-            setState(() {
-              _isLoading = false;
-            });
+      ui_web.platformViewRegistry.registerViewFactory(viewType, (int viewId) {
+        final iframe = html.IFrameElement()
+          ..srcdoc =
+              htmlContent // Use srcdoc instead of src for HTML content
+          ..style.border = 'none'
+          ..width = '100%'
+          ..height = '600';
+        iframe.onLoad.listen((event) {
+          setState(() {
+            _isLoading = false;
           });
-          iframe.onError.listen((event) {
-            setState(() {
-              _isLoading = false;
-              _errorText = "Failed to load map. Please check the region name.";
-            });
+        });
+        iframe.onError.listen((event) {
+          setState(() {
+            _isLoading = false;
+            _errorText = "Failed to load map. Please check the region name.";
           });
-          return iframe;
-        },
-      );
+        });
+        return iframe;
+      });
       setState(() {
         _iframeViewType = viewType;
       });
@@ -1494,7 +1902,10 @@ class _RouteMapPageState extends State<RouteMapPage> {
                         Center(
                           child: Text(
                             _errorText!,
-                            style: const TextStyle(color: Colors.red, fontSize: 16),
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 16,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ),
