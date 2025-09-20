@@ -607,7 +607,10 @@ class _RoutePageState extends State<RoutePage> {
               ),
               riskLevel: routeData['risk_level'] ?? 'unknown',
               routeColor: _getRouteColor(i),
+<<<<<<< HEAD
               safetyScore: (routeData['safety_score'] ?? 0.5).toDouble(),
+=======
+>>>>>>> 9df907fb2b24217272c5170579c2aee73a45e59e
             ),
           );
         }
@@ -1466,7 +1469,11 @@ class _RoutePageState extends State<RoutePage> {
                                       _isLoading = true;
                                     });
                                     final url =
+<<<<<<< HEAD
                                         "http://127.0.0.1:5000/live_map?region=$region&route_count=$_numRoutes";
+=======
+                                        "http://127.0.0.1:5000/map?region=$region";
+>>>>>>> 9df907fb2b24217272c5170579c2aee73a45e59e
                                     final viewType =
                                         "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
                                     // ignore: undefined_prefixed_name
