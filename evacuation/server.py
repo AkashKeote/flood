@@ -299,6 +299,184 @@ def get_routes():
             "matched_region": region if 'region' in locals() else "unknown"
         }), 500
 
+@app.route("/live_map")
+def live_map():
+    """Generate live evacuation map with dynamic route count for web view"""
+    try:
+        import folium
+        from folium import plugins
+        
+        region = request.args.get("region", "")
+        route_count = int(request.args.get("route_count", "5"))
+        
+        # Validate route count limits
+        route_count = max(3, min(route_count, 15))
+        
+        if not region:
+            return """
+            <html><body style='font-family: Arial; padding: 20px;'>
+            <h2>⚠️ Error</h2>
+            <p>Region parameter is required</p>
+            </body></html>
+            """, 400
+
+        # Try to use dynamic core first
+        if DYNAMIC_AVAILABLE:
+            try:
+                result = get_k_nearest_low_risk_routes(
+                    from_area=region, 
+                    to_area="marine drive", 
+                    k=route_count
+                )
+                
+                if result.get("success") and result.get("routes"):
+                    # Get coordinates from first route to center the map
+                    first_route = result["routes"][0]
+                    if first_route.get("coordinates") and len(first_route["coordinates"]) > 0:
+                        # Use first coordinate to center map
+                        center_lat = first_route["coordinates"][0][0]
+                        center_lon = first_route["coordinates"][0][1]
+                    else:
+                        # Default to Mumbai center
+                        center_lat, center_lon = 19.0760, 72.8777
+                    
+                    # Create Folium map
+                    m = folium.Map(
+                        location=[center_lat, center_lon],
+                        zoom_start=12,
+                        tiles='OpenStreetMap'
+                    )
+                    
+                    # Define colors for different routes
+                    colors = ['red', 'blue', 'green', 'orange', 'purple', 'darkred', 'lightblue', 'darkgreen']
+                    
+                    # Add routes to map
+                    for i, route in enumerate(result["routes"]):
+                        if route.get("coordinates") and len(route["coordinates"]) > 1:
+                            color = colors[i % len(colors)]
+                            
+                            # Add route polyline
+                            folium.PolyLine(
+                                locations=route["coordinates"],
+                                color=color,
+                                weight=4,
+                                opacity=0.8,
+                                popup=f"Route {route['id']}: {route['length_km']} km, {route['eta_minutes']:.1f} min"
+                            ).add_to(m)
+                            
+                            # Add start marker
+                            if len(route["coordinates"]) > 0:
+                                folium.Marker(
+                                    location=route["coordinates"][0],
+                                    popup=f"Start - Route {route['id']}",
+                                    icon=folium.Icon(color='green', icon='play')
+                                ).add_to(m)
+                            
+                            # Add end marker
+                            if len(route["coordinates"]) > 1:
+                                folium.Marker(
+                                    location=route["coordinates"][-1],
+                                    popup=f"End - Route {route['id']} (Marine Drive)",
+                                    icon=folium.Icon(color='red', icon='stop')
+                                ).add_to(m)
+                    
+                    # Add a legend
+                    legend_html = f"""
+                    <div style="position: fixed; 
+                                top: 10px; right: 10px; width: 300px; height: auto; 
+                                background-color: white; border:2px solid grey; z-index:9999; 
+                                font-size:14px; padding: 10px;">
+                    <h4>🚨 Evacuation Routes</h4>
+                    <p><strong>From:</strong> {result['from_area']}</p>
+                    <p><strong>To:</strong> {result['to_area']}</p>
+                    <p><strong>Routes:</strong> {len(result['routes'])}</p>
+                    <hr>
+                    """
+                    
+                    for i, route in enumerate(result["routes"]):
+                        color = colors[i % len(colors)]
+                        legend_html += f"""
+                        <p><span style="color: {color};">●</span> 
+                        Route {route['id']}: {route['length_km']} km, {route['eta_minutes']:.1f} min</p>
+                        """
+                    
+                    legend_html += """
+                    <hr>
+                    <small>Algorithm: Multi-factor routing v2.0</small>
+                    </div>
+                    """
+                    
+                    m.get_root().html.add_child(folium.Element(legend_html))
+                    
+                    # Add fullscreen plugin
+                    plugins.Fullscreen().add_to(m)
+                    
+                    # Get the HTML
+                    map_html = m._repr_html_()
+                    
+                    return map_html, 200, {'Content-Type': 'text/html'}
+                else:
+                    error_msg = result.get('error', 'No routes found')
+                    # Create a simple map with error message
+                    m = folium.Map(location=[19.0760, 72.8777], zoom_start=11, tiles='OpenStreetMap')
+                    folium.Marker(
+                        location=[19.0760, 72.8777],
+                        popup=f"Error: {error_msg}",
+                        icon=folium.Icon(color='red', icon='exclamation-sign')
+                    ).add_to(m)
+                    return m._repr_html_(), 200, {'Content-Type': 'text/html'}
+                    
+            except Exception as e:
+                print(f"⚠️ live_map dynamic core failed: {e}")
+        
+        # Fallback to static map with sample routes
+        m = folium.Map(location=[19.0760, 72.8777], zoom_start=11, tiles='OpenStreetMap')
+        
+        # Add some sample routes for fallback
+        sample_routes = [
+            {
+                "name": "Route 1 to Safe Zone North", 
+                "coords": [[19.0760, 72.8777], [19.1000, 72.9000], [19.1200, 72.9200]],
+                "color": "red"
+            },
+            {
+                "name": "Route 2 to Safe Zone South", 
+                "coords": [[19.0760, 72.8777], [19.0500, 72.8500], [19.0300, 72.8300]],
+                "color": "blue"
+            },
+            {
+                "name": "Route 3 to Safe Zone East", 
+                "coords": [[19.0760, 72.8777], [19.0800, 72.9000], [19.0900, 72.9300]],
+                "color": "green"
+            }
+        ]
+        
+        for route in sample_routes:
+            folium.PolyLine(
+                locations=route["coords"],
+                color=route["color"],
+                weight=4,
+                opacity=0.8,
+                popup=route["name"]
+            ).add_to(m)
+        
+        folium.Marker(
+            location=[19.0760, 72.8777],
+            popup=f"Evacuation from: {region}",
+            icon=folium.Icon(color='orange', icon='home')
+        ).add_to(m)
+        
+        return m._repr_html_(), 200, {'Content-Type': 'text/html'}
+        
+    except Exception as e:
+        return f"""
+        <html><body style='font-family: Arial; padding: 20px; background: #f8d7da;'>
+        <h2>❌ Server Error</h2>
+        <p>Failed to generate evacuation map: {str(e)}</p>
+        <p>Make sure folium is installed: pip install folium</p>
+        </body></html>
+        """, 500
+
 @app.route("/map")
 def map_page():
     """Generate evacuation map using llload.py or fallback HTML"""

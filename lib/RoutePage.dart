@@ -1466,7 +1466,7 @@ class _RoutePageState extends State<RoutePage> {
                                       _isLoading = true;
                                     });
                                     final url =
-                                        "http://127.0.0.1:5001/live_map?region=$region&route_count=$_numRoutes";
+                                        "http://127.0.0.1:5000/live_map?region=$region&route_count=$_numRoutes";
                                     final viewType =
                                         "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
                                     // ignore: undefined_prefixed_name
