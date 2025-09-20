@@ -78,6 +78,7 @@ class BackendApiService {
     int routeCount = 5,
   }) async {
     try {
+      // Use the working server (port 5000) with fixed app_core
       final response = await http.post(
         Uri.parse('$baseUrl/routes'),
         headers: _headers,
@@ -98,11 +99,14 @@ class BackendApiService {
     }
   }
 
-  /// Get evacuation map HTML for a region
-  static Future<String> getEvacuationMap(String region) async {
+  /// Get evacuation map HTML for a region with route count
+  static Future<String> getEvacuationMap(String region, {int routeCount = 10}) async {
     try {
+      // Use the working server (port 5000)
+      String mapUrl = 'http://localhost:5000/live_map?region=$region&route_count=$routeCount';
+      
       final response = await http.get(
-        Uri.parse('$baseUrl/map?region=$region'),
+        Uri.parse(mapUrl),
         headers: {
           'Accept': 'text/html,application/json',
         },
@@ -122,7 +126,19 @@ class BackendApiService {
           }
         }
       } else {
-        throw Exception('Failed to get evacuation map: ${response.statusCode}');
+        // Fallback to original server (port 5000)
+        final fallbackResponse = await http.get(
+          Uri.parse('$baseUrl/map?region=$region'),
+          headers: {
+            'Accept': 'text/html,application/json',
+          },
+        );
+        
+        if (fallbackResponse.statusCode == 200) {
+          return fallbackResponse.body;
+        } else {
+          throw Exception('Failed to get evacuation map: ${response.statusCode}');
+        }
       }
     } catch (e) {
       throw Exception('Network error during map fetch: $e');

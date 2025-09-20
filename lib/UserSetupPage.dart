@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'main.dart';
 import 'user_service.dart';
+import 'mumbai_areas.dart';
 import 'auth_service.dart';
 import 'alert_service.dart';
 import 'AuthSignupPage.dart';
@@ -31,40 +32,8 @@ class _UserSetupPageState extends State<UserSetupPage>
   bool _isEmailVerified = false;
   bool _obscurePassword = true;
 
-  // Mumbai areas from backend dummyFloodData (exact names from your backend)
-  final List<String> _mumbaiAreas = [
-    'Andheri East',
-    'Andheri West', 
-    'Bandra East',
-    'Bandra West',
-    'Borivali East',
-    'Borivali West',
-    'Colaba',
-    'Dadar East',
-    'Dadar West',
-    'Fort',
-    'Ghatkopar East',
-    'Ghatkopar West',
-    'Juhu',
-    'Kandivali East',
-    'Kandivali West',
-    'Kurla East',
-    'Kurla West',
-    'Lower Parel',
-    'Malad East',
-    'Malad West',
-    'Marine Lines',
-    'Mumbai',
-    'Powai',
-    'Santa Cruz East',
-    'Santa Cruz West',
-    'Thane',
-    'Thane West',
-    'Versova',
-    'Vikhroli East',
-    'Vikhroli West',
-    'Worli'
-  ];
+  // Shared Mumbai areas list
+  final List<String> _mumbaiAreas = MumbaiAreas.list;
 
   @override
   void initState() {
@@ -80,21 +49,14 @@ class _UserSetupPageState extends State<UserSetupPage>
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeInOut,
-    ));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+    );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+        );
 
     // Start animations
     _fadeController.forward();
@@ -114,16 +76,17 @@ class _UserSetupPageState extends State<UserSetupPage>
 
     // Load existing user data
     final name = await UserService.getUserName();
-    final area = await UserService.getUserWard(); // Still using getUserWard for backward compatibility
+    final area =
+        await UserService.getUserWard(); // Still using getUserWard for backward compatibility
     final email = await UserService.getUserEmail();
     final phone = await UserService.getUserPhone();
-    
+
     if (name != null && name.isNotEmpty) {
       setState(() {
         _nameController.text = name;
       });
     }
-    
+
     if (email != null && email.isNotEmpty) {
       setState(() {
         _emailController.text = email;
@@ -134,7 +97,7 @@ class _UserSetupPageState extends State<UserSetupPage>
         _phoneController.text = phone;
       });
     }
-    
+
     if (area != null && area.isNotEmpty) {
       setState(() {
         _selectedWard = area;
@@ -203,7 +166,8 @@ class _UserSetupPageState extends State<UserSetupPage>
         return;
       }
     } else if (_notificationMethod == 'sms') {
-      if (trimmedPhone.isEmpty || !RegExp(r'^\+?[0-9]{10,15}$').hasMatch(trimmedPhone)) {
+      if (trimmedPhone.isEmpty ||
+          !RegExp(r'^\+?[0-9]{10,15}$').hasMatch(trimmedPhone)) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Please enter a valid phone number'),
@@ -227,9 +191,9 @@ class _UserSetupPageState extends State<UserSetupPage>
     try {
       // Save user data locally first
       await UserService.saveUserDataWithEmail(
-        trimmedName, 
-        _selectedWard!, 
-        _notificationMethod == 'email' ? _emailController.text.trim() : null
+        trimmedName,
+        _selectedWard!,
+        _notificationMethod == 'email' ? _emailController.text.trim() : null,
       );
       if (_notificationMethod == 'sms') {
         await UserService.saveUserPhone(trimmedPhone);
@@ -237,7 +201,8 @@ class _UserSetupPageState extends State<UserSetupPage>
 
       // Register with backend server for email alerts (when method is email)
       Map<String, dynamic>? result;
-      if (_notificationMethod == 'email' && _emailController.text.trim().isNotEmpty) {
+      if (_notificationMethod == 'email' &&
+          _emailController.text.trim().isNotEmpty) {
         result = await AuthService.registerUser(
           name: trimmedName,
           email: _emailController.text.trim(),
@@ -268,7 +233,9 @@ class _UserSetupPageState extends State<UserSetupPage>
           if (direct['success'] == true) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('✉️ Email sent to ${_emailController.text.trim()}'),
+                content: Text(
+                  '✉️ Email sent to ${_emailController.text.trim()}',
+                ),
                 backgroundColor: Colors.green[400],
                 behavior: SnackBarBehavior.floating,
                 duration: Duration(seconds: 4),
@@ -280,7 +247,9 @@ class _UserSetupPageState extends State<UserSetupPage>
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('⚠️ Could not send test email: ${direct['error']}'),
+                content: Text(
+                  '⚠️ Could not send test email: ${direct['error']}',
+                ),
                 backgroundColor: Colors.orange[400],
                 behavior: SnackBarBehavior.floating,
                 duration: Duration(seconds: 5),
@@ -294,7 +263,7 @@ class _UserSetupPageState extends State<UserSetupPage>
       } else if (result != null) {
         // Check if it's a duplicate email error
         String errorMsg = result['error'] ?? 'Unknown error';
-        
+
         if (errorMsg.toLowerCase().contains('already registered')) {
           // User already exists - this is actually okay
           if (mounted) {
@@ -320,7 +289,9 @@ class _UserSetupPageState extends State<UserSetupPage>
             if (direct['success'] == true) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('✉️ Test email sent to ${_emailController.text.trim()}'),
+                  content: Text(
+                    '✉️ Test email sent to ${_emailController.text.trim()}',
+                  ),
                   backgroundColor: Colors.green[400],
                   behavior: SnackBarBehavior.floating,
                   duration: Duration(seconds: 4),
@@ -332,7 +303,9 @@ class _UserSetupPageState extends State<UserSetupPage>
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('⚠️ Could not send test email: ${direct['error']}'),
+                  content: Text(
+                    '⚠️ Could not send test email: ${direct['error']}',
+                  ),
                   backgroundColor: Colors.orange[400],
                   behavior: SnackBarBehavior.floating,
                   duration: Duration(seconds: 5),
@@ -368,7 +341,9 @@ class _UserSetupPageState extends State<UserSetupPage>
             if (direct['success'] == true) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('✉️ Test email sent to ${_emailController.text.trim()}'),
+                  content: Text(
+                    '✉️ Test email sent to ${_emailController.text.trim()}',
+                  ),
                   backgroundColor: Colors.green[400],
                   behavior: SnackBarBehavior.floating,
                   duration: Duration(seconds: 4),
@@ -380,7 +355,9 @@ class _UserSetupPageState extends State<UserSetupPage>
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('⚠️ Could not send test email: ${direct['error']}'),
+                  content: Text(
+                    '⚠️ Could not send test email: ${direct['error']}',
+                  ),
                   backgroundColor: Colors.orange[400],
                   behavior: SnackBarBehavior.floating,
                   duration: Duration(seconds: 5),
@@ -392,7 +369,7 @@ class _UserSetupPageState extends State<UserSetupPage>
             }
           }
         }
-        
+
         print('📍 User will still be able to use the app locally');
       }
 
@@ -402,12 +379,9 @@ class _UserSetupPageState extends State<UserSetupPage>
       // Navigate to dashboard
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => const DashboardMaterial(),
-          ),
+          MaterialPageRoute(builder: (context) => const DashboardMaterial()),
         );
       }
-
     } catch (e) {
       print('Error in _proceedToApp: $e');
       if (mounted) {
@@ -435,7 +409,7 @@ class _UserSetupPageState extends State<UserSetupPage>
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
-    
+
     return Scaffold(
       backgroundColor: Color(0xFFF7F6F2),
       body: Container(
@@ -443,10 +417,7 @@ class _UserSetupPageState extends State<UserSetupPage>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF7F6F2),
-              Color(0xFFB5C7F7).withOpacity(0.1),
-            ],
+            colors: [Color(0xFFF7F6F2), Color(0xFFB5C7F7).withOpacity(0.1)],
           ),
         ),
         child: SafeArea(
@@ -458,17 +429,22 @@ class _UserSetupPageState extends State<UserSetupPage>
                 child: Container(
                   width: double.infinity,
                   constraints: BoxConstraints(
-                    minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom,
+                    minHeight:
+                        MediaQuery.of(context).size.height -
+                        MediaQuery.of(context).padding.top -
+                        MediaQuery.of(context).padding.bottom,
                   ),
                   padding: EdgeInsets.symmetric(
                     horizontal: isDesktop ? 40 : 24,
                     vertical: isDesktop ? 40 : 20,
                   ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          SizedBox(height: isDesktop ? 10 : 20), // Reduced top spacing                      // Animated Logo Container (on background)
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        height: isDesktop ? 10 : 20,
+                      ), // Reduced top spacing                      // Animated Logo Container (on background)
                       AnimatedBuilder(
                         animation: _fadeAnimation,
                         builder: (context, child) {
@@ -479,7 +455,9 @@ class _UserSetupPageState extends State<UserSetupPage>
                               height: isDesktop ? 140 : 120,
                               decoration: BoxDecoration(
                                 color: Color(0xFFB5C7F7),
-                                borderRadius: BorderRadius.circular(isDesktop ? 36 : 32),
+                                borderRadius: BorderRadius.circular(
+                                  isDesktop ? 36 : 32,
+                                ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Color(0xFFB5C7F7).withOpacity(0.3),
@@ -499,7 +477,6 @@ class _UserSetupPageState extends State<UserSetupPage>
                       ),
 
                       SizedBox(height: isDesktop ? 30 : 20), // Reduced spacing
-
                       // Animated Title (on background)
                       AnimatedBuilder(
                         animation: _fadeAnimation,
@@ -543,14 +520,15 @@ class _UserSetupPageState extends State<UserSetupPage>
                       ),
 
                       SizedBox(height: isDesktop ? 30 : 20), // Reduced spacing
-
                       // User Input Container (White Container)
                       Container(
                         width: double.infinity,
                         padding: EdgeInsets.all(isDesktop ? 32 : 24),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(isDesktop ? 24 : 20),
+                          borderRadius: BorderRadius.circular(
+                            isDesktop ? 24 : 20,
+                          ),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.grey.withOpacity(0.08),
@@ -570,7 +548,9 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   height: isDesktop ? 32 : 28,
                                   decoration: BoxDecoration(
                                     color: Color(0xFFB5C7F7),
-                                    borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 10 : 8,
+                                    ),
                                   ),
                                   child: Icon(
                                     Icons.person,
@@ -581,11 +561,11 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 SizedBox(width: isDesktop ? 16 : 12),
                                 Expanded(
                                   child: Text(
-                                  'What is your name?',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: isDesktop ? 20 : 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF22223B),
+                                    'What is your name?',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: isDesktop ? 20 : 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF22223B),
                                     ),
                                     softWrap: true,
                                   ),
@@ -598,22 +578,35 @@ class _UserSetupPageState extends State<UserSetupPage>
                               decoration: InputDecoration(
                                 hintText: 'Enter your name',
                                 border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                  borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                  borderRadius: BorderRadius.circular(
+                                    isDesktop ? 16 : 12,
+                                  ),
+                                  borderSide: BorderSide(
+                                    color: Color(0xFFB5C7F7),
+                                  ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                  borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                  borderRadius: BorderRadius.circular(
+                                    isDesktop ? 16 : 12,
+                                  ),
+                                  borderSide: BorderSide(
+                                    color: Color(0xFFB5C7F7),
+                                    width: 2,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(
+                                    isDesktop ? 16 : 12,
+                                  ),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
+                                  ),
                                 ),
                                 filled: true,
                                 fillColor: Color(0xFFF7F6F2),
                                 contentPadding: EdgeInsets.symmetric(
-                                  horizontal: isDesktop ? 20 : 16, 
-                                  vertical: isDesktop ? 20 : 16
+                                  horizontal: isDesktop ? 20 : 16,
+                                  vertical: isDesktop ? 20 : 16,
                                 ),
                               ),
                               style: GoogleFonts.poppins(
@@ -621,9 +614,10 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 color: Color(0xFF22223B),
                               ),
                             ),
-                            
-                            SizedBox(height: isDesktop ? 24 : 16), // Reduced spacing
-                            
+
+                            SizedBox(
+                              height: isDesktop ? 24 : 16,
+                            ), // Reduced spacing
                             // Notification method selector
                             Row(
                               children: [
@@ -632,7 +626,9 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   height: isDesktop ? 32 : 28,
                                   decoration: BoxDecoration(
                                     color: Color(0xFFB5C7F7),
-                                    borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 10 : 8,
+                                    ),
                                   ),
                                   child: Icon(
                                     Icons.notifications,
@@ -643,11 +639,13 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 SizedBox(width: isDesktop ? 16 : 12),
                                 Expanded(
                                   child: Text(
-                                  'How should we notify you?',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: isDesktop ? 18 : 16, // Reduced font size
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF22223B),
+                                    'How should we notify you?',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: isDesktop
+                                          ? 18
+                                          : 16, // Reduced font size
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF22223B),
                                     ),
                                     softWrap: true,
                                   ),
@@ -669,7 +667,9 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   selected: _notificationMethod == 'email',
                                   onSelected: (selected) {
                                     if (selected) {
-                                      setState(() { _notificationMethod = 'email'; });
+                                      setState(() {
+                                        _notificationMethod = 'email';
+                                      });
                                     }
                                   },
                                 ),
@@ -686,7 +686,9 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   selected: _notificationMethod == 'sms',
                                   onSelected: (selected) {
                                     if (selected) {
-                                      setState(() { _notificationMethod = 'sms'; });
+                                      setState(() {
+                                        _notificationMethod = 'sms';
+                                      });
                                     }
                                   },
                                 ),
@@ -696,22 +698,24 @@ class _UserSetupPageState extends State<UserSetupPage>
 
                             // Contact method input based on selection
                             if (_notificationMethod == 'email') ...[
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: isDesktop ? 32 : 28,
-                                      height: isDesktop ? 32 : 28,
-                                      decoration: BoxDecoration(
-                                        color: Color(0xFFB5C7F7),
-                                        borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
-                                      ),
-                                      child: Icon(
-                                      Icons.email,
-                                        color: Colors.white,
-                                        size: isDesktop ? 18 : 16,
+                              Row(
+                                children: [
+                                  Container(
+                                    width: isDesktop ? 32 : 28,
+                                    height: isDesktop ? 32 : 28,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFFB5C7F7),
+                                      borderRadius: BorderRadius.circular(
+                                        isDesktop ? 10 : 8,
                                       ),
                                     ),
-                                    SizedBox(width: isDesktop ? 16 : 12),
+                                    child: Icon(
+                                      Icons.email,
+                                      color: Colors.white,
+                                      size: isDesktop ? 18 : 16,
+                                    ),
+                                  ),
+                                  SizedBox(width: isDesktop ? 16 : 12),
                                   Expanded(
                                     child: Text(
                                       'Enter your email and password',
@@ -721,33 +725,46 @@ class _UserSetupPageState extends State<UserSetupPage>
                                         color: Color(0xFF22223B),
                                       ),
                                       softWrap: true,
-                                      ),
                                     ),
-                                  ],
-                                ),
-                                SizedBox(height: isDesktop ? 16 : 12),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: isDesktop ? 16 : 12),
                               TextField(
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
                                 decoration: InputDecoration(
                                   hintText: 'your@email.com',
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                    borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 16 : 12,
+                                    ),
+                                    borderSide: BorderSide(
+                                      color: Color(0xFFB5C7F7),
+                                    ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                    borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 16 : 12,
+                                    ),
+                                    borderSide: BorderSide(
+                                      color: Color(0xFFB5C7F7),
+                                      width: 2,
+                                    ),
                                   ),
                                   enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                    borderSide: BorderSide(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 16 : 12,
+                                    ),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey[300]!,
+                                    ),
                                   ),
                                   filled: true,
                                   fillColor: Color(0xFFF7F6F2),
                                   contentPadding: EdgeInsets.symmetric(
                                     horizontal: isDesktop ? 20 : 16,
-                                        vertical: isDesktop ? 16 : 14,
+                                    vertical: isDesktop ? 16 : 14,
                                   ),
                                 ),
                                 style: GoogleFonts.poppins(
@@ -762,16 +779,29 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 decoration: InputDecoration(
                                   hintText: 'Password',
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                    borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 16 : 12,
+                                    ),
+                                    borderSide: BorderSide(
+                                      color: Color(0xFFB5C7F7),
+                                    ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                    borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 16 : 12,
+                                    ),
+                                    borderSide: BorderSide(
+                                      color: Color(0xFFB5C7F7),
+                                      width: 2,
+                                    ),
                                   ),
                                   enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                    borderSide: BorderSide(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 16 : 12,
+                                    ),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey[300]!,
+                                    ),
                                   ),
                                   filled: true,
                                   fillColor: Color(0xFFF7F6F2),
@@ -780,121 +810,217 @@ class _UserSetupPageState extends State<UserSetupPage>
                                     vertical: isDesktop ? 16 : 14,
                                   ),
                                   suffixIcon: IconButton(
-                                    icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility
+                                          : Icons.visibility_off,
+                                    ),
                                     onPressed: () {
-                                      setState(() { _obscurePassword = !_obscurePassword; });
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
                                     },
                                   ),
                                 ),
-                                            style: GoogleFonts.poppins(
-                                              fontSize: isDesktop ? 18 : 16,
-                                              color: Color(0xFF22223B),
-                                            ),
-                                          ),
+                                style: GoogleFonts.poppins(
+                                  fontSize: isDesktop ? 18 : 16,
+                                  color: Color(0xFF22223B),
+                                ),
+                              ),
                               SizedBox(height: isDesktop ? 12 : 10),
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton(
-                                  onPressed: _isLoading ? null : () async {
-                                    final email = _emailController.text.trim();
-                                    final password = _passwordController.text.trim();
-                                    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
-                                    if (email.isEmpty || !emailRegex.hasMatch(email)) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Please enter a valid email address'),
-                                          backgroundColor: Colors.red[400],
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                        ),
-                                      );
-                                      return;
-                                    }
-                                    if (password.isEmpty) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Please enter your password'),
-                                          backgroundColor: Colors.red[400],
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(12),
-                                          ),
-                                        ),
-                                      );
-                                      return;
-                                    }
-                                    setState(() { _isLoading = true; });
-                                    try {
-                                      await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
-                                      final user = FirebaseAuth.instance.currentUser;
-                                      if (user != null && user.emailVerified) {
-                                        setState(() { _isEmailVerified = true; });
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('✅ Email verified'),
-                                            backgroundColor: Colors.green[400],
-                                            behavior: SnackBarBehavior.floating,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                          ),
-                                        );
-                                      } else {
-                                        setState(() { _isEmailVerified = false; });
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text('📧 Verify your email from inbox, then try again'),
-                                            backgroundColor: Colors.orange[400],
-                                            behavior: SnackBarBehavior.floating,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                          ),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      setState(() { _isEmailVerified = false; });
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text('❌ Login failed: $e'),
-                                          backgroundColor: Colors.red[400],
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        ),
-                                      );
-                                    } finally {
-                                      if (mounted) setState(() { _isLoading = false; });
-                                    }
-                                  },
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () async {
+                                          final email = _emailController.text
+                                              .trim();
+                                          final password = _passwordController
+                                              .text
+                                              .trim();
+                                          final emailRegex = RegExp(
+                                            r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                                          );
+                                          if (email.isEmpty ||
+                                              !emailRegex.hasMatch(email)) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Please enter a valid email address',
+                                                ),
+                                                backgroundColor:
+                                                    Colors.red[400],
+                                                behavior:
+                                                    SnackBarBehavior.floating,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                              ),
+                                            );
+                                            return;
+                                          }
+                                          if (password.isEmpty) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Please enter your password',
+                                                ),
+                                                backgroundColor:
+                                                    Colors.red[400],
+                                                behavior:
+                                                    SnackBarBehavior.floating,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                              ),
+                                            );
+                                            return;
+                                          }
+                                          setState(() {
+                                            _isLoading = true;
+                                          });
+                                          try {
+                                            await FirebaseAuth.instance
+                                                .signInWithEmailAndPassword(
+                                                  email: email,
+                                                  password: password,
+                                                );
+                                            final user = FirebaseAuth
+                                                .instance
+                                                .currentUser;
+                                            if (user != null &&
+                                                user.emailVerified) {
+                                              setState(() {
+                                                _isEmailVerified = true;
+                                              });
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    '✅ Email verified',
+                                                  ),
+                                                  backgroundColor:
+                                                      Colors.green[400],
+                                                  behavior:
+                                                      SnackBarBehavior.floating,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                ),
+                                              );
+                                            } else {
+                                              setState(() {
+                                                _isEmailVerified = false;
+                                              });
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    '📧 Verify your email from inbox, then try again',
+                                                  ),
+                                                  backgroundColor:
+                                                      Colors.orange[400],
+                                                  behavior:
+                                                      SnackBarBehavior.floating,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            setState(() {
+                                              _isEmailVerified = false;
+                                            });
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  '❌ Login failed: $e',
+                                                ),
+                                                backgroundColor:
+                                                    Colors.red[400],
+                                                behavior:
+                                                    SnackBarBehavior.floating,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                              ),
+                                            );
+                                          } finally {
+                                            if (mounted)
+                                              setState(() {
+                                                _isLoading = false;
+                                              });
+                                          }
+                                        },
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: _isEmailVerified ? Colors.green[600] : Color(0xFFB5C7F7),
+                                    backgroundColor: _isEmailVerified
+                                        ? Colors.green[600]
+                                        : Color(0xFFB5C7F7),
                                     foregroundColor: Color(0xFF22223B),
                                     padding: EdgeInsets.symmetric(
                                       vertical: isDesktop ? 16 : 14,
                                     ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(isDesktop ? 12 : 10),
+                                      borderRadius: BorderRadius.circular(
+                                        isDesktop ? 12 : 10,
+                                      ),
                                     ),
                                   ),
-                                  child: Text(_isEmailVerified ? 'Verified' : 'Verify Email'),
+                                  child: Text(
+                                    _isEmailVerified
+                                        ? 'Verified'
+                                        : 'Verify Email',
+                                  ),
                                 ),
                               ),
                               SizedBox(height: isDesktop ? 8 : 8),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text("Don't have an account? ", style: GoogleFonts.poppins(fontSize: isDesktop ? 14 : 12)),
-                                    TextButton(
+                                  Text(
+                                    "Don't have an account? ",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: isDesktop ? 14 : 12,
+                                    ),
+                                  ),
+                                  TextButton(
                                     onPressed: () {
                                       Navigator.of(context).push(
-                                        MaterialPageRoute(builder: (context) => const AuthSignupPage()),
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const AuthSignupPage(),
+                                        ),
                                       );
                                     },
-                                      child: Text(
+                                    child: Text(
                                       'Sign up',
-                                      style: GoogleFonts.poppins(fontSize: isDesktop ? 14 : 12, fontWeight: FontWeight.w600),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: isDesktop ? 14 : 12,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
+                              ),
                               SizedBox(height: isDesktop ? 24 : 16),
                             ] else ...[
                               Row(
@@ -904,7 +1030,9 @@ class _UserSetupPageState extends State<UserSetupPage>
                                     height: isDesktop ? 32 : 28,
                                     decoration: BoxDecoration(
                                       color: Color(0xFFB5C7F7),
-                                      borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
+                                      borderRadius: BorderRadius.circular(
+                                        isDesktop ? 10 : 8,
+                                      ),
                                     ),
                                     child: Icon(
                                       Icons.sms,
@@ -915,11 +1043,11 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   SizedBox(width: isDesktop ? 16 : 12),
                                   Expanded(
                                     child: Text(
-                                    'Enter your mobile number',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: isDesktop ? 18 : 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF22223B),
+                                      'Enter your mobile number',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: isDesktop ? 18 : 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF22223B),
                                       ),
                                       softWrap: true,
                                     ),
@@ -933,22 +1061,35 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 decoration: InputDecoration(
                                   hintText: 'e.g., 9876543210 or +919876543210',
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                    borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 16 : 12,
+                                    ),
+                                    borderSide: BorderSide(
+                                      color: Color(0xFFB5C7F7),
+                                    ),
                                   ),
                                   focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                    borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 16 : 12,
+                                    ),
+                                    borderSide: BorderSide(
+                                      color: Color(0xFFB5C7F7),
+                                      width: 2,
+                                    ),
                                   ),
                                   enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                    borderSide: BorderSide(color: Colors.grey[300]!),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 16 : 12,
+                                    ),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey[300]!,
+                                    ),
                                   ),
                                   filled: true,
                                   fillColor: Color(0xFFF7F6F2),
                                   contentPadding: EdgeInsets.symmetric(
-                                    horizontal: isDesktop ? 20 : 16, 
-                                    vertical: isDesktop ? 16 : 14
+                                    horizontal: isDesktop ? 20 : 16,
+                                    vertical: isDesktop ? 16 : 14,
                                   ),
                                 ),
                                 style: GoogleFonts.poppins(
@@ -960,7 +1101,7 @@ class _UserSetupPageState extends State<UserSetupPage>
                             ],
                             // spacing after conditional contact field
                             SizedBox(height: isDesktop ? 24 : 16),
-                            
+
                             // Area Selection Section
                             Row(
                               children: [
@@ -969,7 +1110,9 @@ class _UserSetupPageState extends State<UserSetupPage>
                                   height: isDesktop ? 32 : 28,
                                   decoration: BoxDecoration(
                                     color: Color(0xFFB5C7F7),
-                                    borderRadius: BorderRadius.circular(isDesktop ? 10 : 8),
+                                    borderRadius: BorderRadius.circular(
+                                      isDesktop ? 10 : 8,
+                                    ),
                                   ),
                                   child: Icon(
                                     Icons.location_on,
@@ -980,11 +1123,11 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 SizedBox(width: isDesktop ? 16 : 12),
                                 Expanded(
                                   child: Text(
-                                  'Select your area',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: isDesktop ? 20 : 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF22223B),
+                                    'Select your area',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: isDesktop ? 20 : 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF22223B),
                                     ),
                                     softWrap: true,
                                   ),
@@ -993,26 +1136,41 @@ class _UserSetupPageState extends State<UserSetupPage>
                             ),
                             SizedBox(height: isDesktop ? 20 : 16),
                             DropdownButtonFormField<String>(
-                              initialValue: _wards.contains(_selectedWard) ? _selectedWard : null,
+                              initialValue: _wards.contains(_selectedWard)
+                                  ? _selectedWard
+                                  : null,
                               decoration: InputDecoration(
                                 hintText: 'Select your area in Mumbai',
                                 border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                  borderSide: BorderSide(color: Color(0xFFB5C7F7)),
+                                  borderRadius: BorderRadius.circular(
+                                    isDesktop ? 16 : 12,
+                                  ),
+                                  borderSide: BorderSide(
+                                    color: Color(0xFFB5C7F7),
+                                  ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                  borderSide: BorderSide(color: Color(0xFFB5C7F7), width: 2),
+                                  borderRadius: BorderRadius.circular(
+                                    isDesktop ? 16 : 12,
+                                  ),
+                                  borderSide: BorderSide(
+                                    color: Color(0xFFB5C7F7),
+                                    width: 2,
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(isDesktop ? 16 : 12),
-                                  borderSide: BorderSide(color: Colors.grey[300]!),
+                                  borderRadius: BorderRadius.circular(
+                                    isDesktop ? 16 : 12,
+                                  ),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey[300]!,
+                                  ),
                                 ),
                                 filled: true,
                                 fillColor: Color(0xFFF7F6F2),
                                 contentPadding: EdgeInsets.symmetric(
-                                  horizontal: isDesktop ? 20 : 16, 
-                                  vertical: isDesktop ? 20 : 16
+                                  horizontal: isDesktop ? 20 : 16,
+                                  vertical: isDesktop ? 20 : 16,
                                 ),
                               ),
                               items: _wards.map((String ward) {
@@ -1032,11 +1190,15 @@ class _UserSetupPageState extends State<UserSetupPage>
                                 setState(() {
                                   _selectedWard = newValue;
                                 });
-                                
+
                                 // When city changes, update user's city in backend
-                                if (newValue != null && newValue != previousWard) {
-                                  print('🏙️ City changed from $previousWard to $newValue');
-                                  if (_notificationMethod == 'email' && _emailController.text.trim().isNotEmpty) {
+                                if (newValue != null &&
+                                    newValue != previousWard) {
+                                  print(
+                                    '🏙️ City changed from $previousWard to $newValue',
+                                  );
+                                  if (_notificationMethod == 'email' &&
+                                      _emailController.text.trim().isNotEmpty) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Row(
@@ -1046,48 +1208,68 @@ class _UserSetupPageState extends State<UserSetupPage>
                                               height: 20,
                                               child: CircularProgressIndicator(
                                                 strokeWidth: 2,
-                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                                valueColor:
+                                                    AlwaysStoppedAnimation<
+                                                      Color
+                                                    >(Colors.white),
                                               ),
                                             ),
                                             SizedBox(width: 12),
-                                            Text('Updating your area to $newValue...'),
+                                            Text(
+                                              'Updating your area to $newValue...',
+                                            ),
                                           ],
                                         ),
                                         backgroundColor: Colors.blue[400],
                                         behavior: SnackBarBehavior.floating,
                                         duration: Duration(seconds: 3),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
                                         ),
                                       ),
                                     );
 
-                                    final updateResult = await AlertService.updateCity(
-                                      email: _emailController.text.trim(),
-                                      newCity: newValue,
-                                    );
+                                    final updateResult =
+                                        await AlertService.updateCity(
+                                          email: _emailController.text.trim(),
+                                          newCity: newValue,
+                                        );
 
                                     if (updateResult['success'] == true) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
-                                          content: Text('✅ Area updated to $newValue'),
+                                          content: Text(
+                                            '✅ Area updated to $newValue',
+                                          ),
                                           backgroundColor: Colors.green[400],
                                           behavior: SnackBarBehavior.floating,
                                           duration: Duration(seconds: 3),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                         ),
                                       );
                                     } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
-                                          content: Text('⚠️ Update failed: ${updateResult['error']}'),
+                                          content: Text(
+                                            '⚠️ Update failed: ${updateResult['error']}',
+                                          ),
                                           backgroundColor: Colors.orange[400],
                                           behavior: SnackBarBehavior.floating,
                                           duration: Duration(seconds: 4),
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                         ),
                                       );
@@ -1104,7 +1286,6 @@ class _UserSetupPageState extends State<UserSetupPage>
                       ),
 
                       SizedBox(height: isDesktop ? 30 : 20), // Reduced spacing
-
                       // Continue Button
                       SizedBox(
                         width: double.infinity,
@@ -1114,44 +1295,50 @@ class _UserSetupPageState extends State<UserSetupPage>
                             backgroundColor: Color(0xFFB5C7F7),
                             foregroundColor: Color(0xFF22223B),
                             padding: EdgeInsets.symmetric(
-                              vertical: isDesktop ? 22 : 18
+                              vertical: isDesktop ? 22 : 18,
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(isDesktop ? 20 : 16),
+                              borderRadius: BorderRadius.circular(
+                                isDesktop ? 20 : 16,
+                              ),
                             ),
                             elevation: 5,
                             shadowColor: Color(0xFFB5C7F7).withOpacity(0.3),
                           ),
-                          child: _isLoading 
-                            ? SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF22223B)),
-                                ),
-                              )
-                            : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Continue',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: isDesktop ? 20 : 18,
-                                      fontWeight: FontWeight.bold,
+                          child: _isLoading
+                              ? SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF22223B),
                                     ),
                                   ),
-                                  SizedBox(width: isDesktop ? 12 : 8),
-                                  Icon(
-                                    Icons.arrow_forward,
-                                    size: isDesktop ? 24 : 20,
-                                  ),
-                                ],
-                              ),
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      'Continue',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: isDesktop ? 20 : 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(width: isDesktop ? 12 : 8),
+                                    Icon(
+                                      Icons.arrow_forward,
+                                      size: isDesktop ? 24 : 20,
+                                    ),
+                                  ],
+                                ),
                         ),
                       ),
 
-                      SizedBox(height: isDesktop ? 20 : 12), // Reduced bottom spacing
+                      SizedBox(
+                        height: isDesktop ? 20 : 12,
+                      ), // Reduced bottom spacing
                     ],
                   ),
                 ),
