@@ -24,7 +24,7 @@ class _RoutePageState extends State<RoutePage> {
   String? _matchedLocation;
   int _matchScore = 0;
   double _speedKmph = 25.0;
-  int _numRoutes = 10;
+  int _numRoutes = 5;
   final bool _showPOIs = false;
   final String _selectedMapStyle = 'OpenStreetMap';
   String? _iframeViewType;
@@ -607,20 +607,11 @@ class _RoutePageState extends State<RoutePage> {
               ),
               riskLevel: routeData['risk_level'] ?? 'unknown',
               routeColor: _getRouteColor(i),
-<<<<<<< HEAD
-              safetyScore: (routeData['safety_score'] ?? 0.5).toDouble(),
-=======
->>>>>>> 9df907fb2b24217272c5170579c2aee73a45e59e
             ),
           );
         }
 
-        // Sort routes by safety score (highest first), then by distance
-        _routes.sort((a, b) {
-          int safetyComparison = b.safetyScore.compareTo(a.safetyScore);
-          if (safetyComparison != 0) return safetyComparison;
-          return a.distanceKm.compareTo(b.distanceKm);
-        });
+        _routes.sort((a, b) => a.distanceKm.compareTo(b.distanceKm));
       } else {
         _matchedLocation = null;
         _matchScore = 0;
@@ -889,8 +880,8 @@ class _RoutePageState extends State<RoutePage> {
                               Slider(
                                 value: _numRoutes.toDouble(),
                                 min: 3,
-                                max: 15,
-                                divisions: 12,
+                                max: 10,
+                                divisions: 7,
                                 activeColor: Color(0xFFB5C7F7),
                                 onChanged: (value) {
                                   setState(() {
@@ -1469,11 +1460,7 @@ class _RoutePageState extends State<RoutePage> {
                                       _isLoading = true;
                                     });
                                     final url =
-<<<<<<< HEAD
-                                        "http://127.0.0.1:5000/live_map?region=$region&route_count=$_numRoutes";
-=======
                                         "http://127.0.0.1:5000/map?region=$region";
->>>>>>> 9df907fb2b24217272c5170579c2aee73a45e59e
                                     final viewType =
                                         "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
                                     // ignore: undefined_prefixed_name
@@ -1725,7 +1712,6 @@ class EvacuationRoute {
   final double estimatedTimeMinutes;
   final String riskLevel;
   final Color routeColor;
-  final double safetyScore;
 
   EvacuationRoute({
     required this.id,
@@ -1734,7 +1720,6 @@ class EvacuationRoute {
     required this.estimatedTimeMinutes,
     required this.riskLevel,
     required this.routeColor,
-    this.safetyScore = 0.5,
   });
 }
 

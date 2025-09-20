@@ -15,21 +15,30 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Try to import backend-only core (preferred), then fall back to llload.py
 try:
-    from app_core_fixed import (
+    from app_core import (
         get_k_nearest_low_risk_routes,
-        ROUTE_COUNT
+        build_and_save_map,
+        G, flood_df, ROUTE_COUNT
     )
-    # Don't load G immediately - load it when needed
-    G = None
-    CORE_SOURCE = "app_core_fixed"
+    CORE_SOURCE = "app_core"
     DYNAMIC_AVAILABLE = True
-    print("✅ app_core_fixed.py successfully imported (backend-only core)")
+    print("✅ app_core.py successfully imported (backend-only core)")
 except Exception as core_err:
-    print(f"⚠️ app_core_fixed import failed: {core_err}. Using fallback...")
-    CORE_SOURCE = None
-    DYNAMIC_AVAILABLE = False
-    G = None
-    flood_df = None
+    print(f"⚠️ app_core import failed: {core_err}. Trying llload.py ...")
+    try:
+        from llload import (
+            get_k_nearest_low_risk_routes,
+            build_and_save_map,
+            G, flood_df, ROUTE_COUNT
+        )
+        CORE_SOURCE = "llload"
+        DYNAMIC_AVAILABLE = True
+        print("✅ llload.py successfully imported")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not import llload.py - {e}")
+        print("📝 Using fallback static data instead")
+        CORE_SOURCE = None
+        DYNAMIC_AVAILABLE = False
 
 app = Flask(__name__)
 CORS(app)
@@ -197,14 +206,11 @@ def predict_flood():
 
 @app.route("/routes", methods=['POST'])
 def get_routes():
-    """Get evacuation routes for a region with enhanced routing logic"""
+    """Get evacuation routes for a region"""
     try:
         data = request.get_json()
         region = data.get('region', '')
-        route_count = data.get('route_count', 10)  # Increased default from 3 to 10
-        
-        # Validate route count limits
-        route_count = max(3, min(route_count, 15))  # Allow 3-15 routes
+        route_count = data.get('route_count', 3)
         
         if not region:
             return jsonify({"error": "region is required"}), 400
@@ -212,42 +218,34 @@ def get_routes():
         # Try to use dynamic core first for routes
         if DYNAMIC_AVAILABLE:
             try:
-                result = get_k_nearest_low_risk_routes(
-                    from_area=region, 
-                    to_area="marine drive", 
-                    k=route_count
+                matched_region, match_score, routes_data = get_k_nearest_low_risk_routes(
+                    region, G, flood_df, k=route_count
                 )
                 
-                if result.get("success"):
-                    # Convert enhanced routes format to API format
+                if matched_region and routes_data:
+                    # Convert llload routes format to API format
                     routes = []
-                    for route in result["routes"]:
-                        route_info = {
-                            "destination": "Marine Drive",
-                            "distance_km": route['length_km'],
-                            "eta": f"{route['eta_minutes']:.1f} min",
-                            "risk_level": "low" if route['safety_score'] > 5 else "moderate",
-                            "safety_score": route.get('safety_score', 1.0),
-                            "coordinates": route.get('coordinates', [])
-                        }
-                        routes.append(route_info)
+                    for route in routes_data:
+                        routes.append({
+                            "destination": route['dest_region'],
+                            "distance_km": route['distance_km'],
+                            "eta": f"{route['eta_min']:.1f} min",
+                            "risk_level": "low",  # All routes from llload are to low-risk areas
+                        })
                     
                     return jsonify({
                         "success": True,
-                        "matched_region": result["from_area"],
-                        "match_score": 95,  # High score since it's from fuzzy matching
+                        "matched_region": matched_region,
+                        "match_score": match_score,
                         "routes": routes,
                         "route_count": len(routes),
-                        "message": f"Found {len(routes)} evacuation routes from {result['from_area']} using enhanced dynamic routing",
-                        "data_source": f"{CORE_SOURCE} - Enhanced Dynamic Routes",
-                        "algorithm_version": "2.0 - Multi-factor routing"
+                        "message": f"Found {len(routes)} evacuation routes from {matched_region} using dynamic routing",
+                        "data_source": f"{CORE_SOURCE} - Dynamic Routes"
                     })
-                else:
-                    print(f"⚠️ Dynamic routing failed: {result.get('error', 'Unknown error')}")
             except Exception as e:
                 print(f"⚠️ dynamic core failed, falling back to static data: {e}")
         
-        # Fallback to enhanced static data
+        # Fallback to static data
         matched_region = None
         for r in MUMBAI_REGIONS:
             if region.lower() in r.lower() or r.lower() in region.lower():
@@ -261,26 +259,14 @@ def get_routes():
                 "available_regions": MUMBAI_REGIONS[:10]
             }), 404
         
-        # Generate enhanced static evacuation routes
-        base_routes = EVACUATION_ROUTES.get(matched_region, [])
-        if not base_routes:
-            # Generate default routes with variety
-            base_routes = [
-                {"destination": "Safe Zone North", "distance_km": 8.5, "eta": "20.2 min", "risk_level": "low", "safety_score": 0.95},
-                {"destination": "Safe Zone South", "distance_km": 12.3, "eta": "29.5 min", "risk_level": "low", "safety_score": 0.90},
-                {"destination": "Safe Zone East", "distance_km": 15.7, "eta": "37.8 min", "risk_level": "low", "safety_score": 0.85},
-                {"destination": "Safe Zone West", "distance_km": 10.1, "eta": "24.2 min", "risk_level": "moderate", "safety_score": 0.80},
-                {"destination": "Emergency Shelter A", "distance_km": 18.4, "eta": "44.2 min", "risk_level": "low", "safety_score": 0.92},
-                {"destination": "Emergency Shelter B", "distance_km": 22.1, "eta": "53.0 min", "risk_level": "low", "safety_score": 0.88},
-                {"destination": "Community Center 1", "distance_km": 6.8, "eta": "16.3 min", "risk_level": "moderate", "safety_score": 0.75},
-                {"destination": "Community Center 2", "distance_km": 14.2, "eta": "34.1 min", "risk_level": "low", "safety_score": 0.87},
-                {"destination": "Relief Camp Alpha", "distance_km": 25.5, "eta": "61.2 min", "risk_level": "low", "safety_score": 0.93},
-                {"destination": "Relief Camp Beta", "distance_km": 19.8, "eta": "47.5 min", "risk_level": "low", "safety_score": 0.89}
-            ]
+        # Get static evacuation routes
+        routes = EVACUATION_ROUTES.get(matched_region, [
+            {"destination": "Safe Zone 1", "distance_km": 10.5, "eta": "25.2 min", "risk_level": "low"},
+            {"destination": "Safe Zone 2", "distance_km": 15.2, "eta": "36.5 min", "risk_level": "low"},
+            {"destination": "Safe Zone 3", "distance_km": 8.7, "eta": "20.9 min", "risk_level": "low"}
+        ])
         
-        # Extend routes if needed and sort by safety score
-        routes = base_routes[:route_count]
-        routes.sort(key=lambda x: x.get('safety_score', 0.5), reverse=True)
+        routes = routes[:route_count]
         
         return jsonify({
             "success": True,
@@ -288,9 +274,8 @@ def get_routes():
             "match_score": 85,
             "routes": routes,
             "route_count": len(routes),
-            "message": f"Found {len(routes)} evacuation routes from {matched_region} using enhanced static data",
-            "data_source": "Enhanced Static Data - Multi-route fallback",
-            "algorithm_version": "2.0 - Enhanced static routing"
+            "message": f"Found {len(routes)} evacuation routes from {matched_region} using static data",
+            "data_source": "Static Data - Fallback"
         })
         
     except Exception as e:
@@ -298,184 +283,6 @@ def get_routes():
             "error": str(e),
             "matched_region": region if 'region' in locals() else "unknown"
         }), 500
-
-@app.route("/live_map")
-def live_map():
-    """Generate live evacuation map with dynamic route count for web view"""
-    try:
-        import folium
-        from folium import plugins
-        
-        region = request.args.get("region", "")
-        route_count = int(request.args.get("route_count", "5"))
-        
-        # Validate route count limits
-        route_count = max(3, min(route_count, 15))
-        
-        if not region:
-            return """
-            <html><body style='font-family: Arial; padding: 20px;'>
-            <h2>⚠️ Error</h2>
-            <p>Region parameter is required</p>
-            </body></html>
-            """, 400
-
-        # Try to use dynamic core first
-        if DYNAMIC_AVAILABLE:
-            try:
-                result = get_k_nearest_low_risk_routes(
-                    from_area=region, 
-                    to_area="marine drive", 
-                    k=route_count
-                )
-                
-                if result.get("success") and result.get("routes"):
-                    # Get coordinates from first route to center the map
-                    first_route = result["routes"][0]
-                    if first_route.get("coordinates") and len(first_route["coordinates"]) > 0:
-                        # Use first coordinate to center map
-                        center_lat = first_route["coordinates"][0][0]
-                        center_lon = first_route["coordinates"][0][1]
-                    else:
-                        # Default to Mumbai center
-                        center_lat, center_lon = 19.0760, 72.8777
-                    
-                    # Create Folium map
-                    m = folium.Map(
-                        location=[center_lat, center_lon],
-                        zoom_start=12,
-                        tiles='OpenStreetMap'
-                    )
-                    
-                    # Define colors for different routes
-                    colors = ['red', 'blue', 'green', 'orange', 'purple', 'darkred', 'lightblue', 'darkgreen']
-                    
-                    # Add routes to map
-                    for i, route in enumerate(result["routes"]):
-                        if route.get("coordinates") and len(route["coordinates"]) > 1:
-                            color = colors[i % len(colors)]
-                            
-                            # Add route polyline
-                            folium.PolyLine(
-                                locations=route["coordinates"],
-                                color=color,
-                                weight=4,
-                                opacity=0.8,
-                                popup=f"Route {route['id']}: {route['length_km']} km, {route['eta_minutes']:.1f} min"
-                            ).add_to(m)
-                            
-                            # Add start marker
-                            if len(route["coordinates"]) > 0:
-                                folium.Marker(
-                                    location=route["coordinates"][0],
-                                    popup=f"Start - Route {route['id']}",
-                                    icon=folium.Icon(color='green', icon='play')
-                                ).add_to(m)
-                            
-                            # Add end marker
-                            if len(route["coordinates"]) > 1:
-                                folium.Marker(
-                                    location=route["coordinates"][-1],
-                                    popup=f"End - Route {route['id']} (Marine Drive)",
-                                    icon=folium.Icon(color='red', icon='stop')
-                                ).add_to(m)
-                    
-                    # Add a legend
-                    legend_html = f"""
-                    <div style="position: fixed; 
-                                top: 10px; right: 10px; width: 300px; height: auto; 
-                                background-color: white; border:2px solid grey; z-index:9999; 
-                                font-size:14px; padding: 10px;">
-                    <h4>🚨 Evacuation Routes</h4>
-                    <p><strong>From:</strong> {result['from_area']}</p>
-                    <p><strong>To:</strong> {result['to_area']}</p>
-                    <p><strong>Routes:</strong> {len(result['routes'])}</p>
-                    <hr>
-                    """
-                    
-                    for i, route in enumerate(result["routes"]):
-                        color = colors[i % len(colors)]
-                        legend_html += f"""
-                        <p><span style="color: {color};">●</span> 
-                        Route {route['id']}: {route['length_km']} km, {route['eta_minutes']:.1f} min</p>
-                        """
-                    
-                    legend_html += """
-                    <hr>
-                    <small>Algorithm: Multi-factor routing v2.0</small>
-                    </div>
-                    """
-                    
-                    m.get_root().html.add_child(folium.Element(legend_html))
-                    
-                    # Add fullscreen plugin
-                    plugins.Fullscreen().add_to(m)
-                    
-                    # Get the HTML
-                    map_html = m._repr_html_()
-                    
-                    return map_html, 200, {'Content-Type': 'text/html'}
-                else:
-                    error_msg = result.get('error', 'No routes found')
-                    # Create a simple map with error message
-                    m = folium.Map(location=[19.0760, 72.8777], zoom_start=11, tiles='OpenStreetMap')
-                    folium.Marker(
-                        location=[19.0760, 72.8777],
-                        popup=f"Error: {error_msg}",
-                        icon=folium.Icon(color='red', icon='exclamation-sign')
-                    ).add_to(m)
-                    return m._repr_html_(), 200, {'Content-Type': 'text/html'}
-                    
-            except Exception as e:
-                print(f"⚠️ live_map dynamic core failed: {e}")
-        
-        # Fallback to static map with sample routes
-        m = folium.Map(location=[19.0760, 72.8777], zoom_start=11, tiles='OpenStreetMap')
-        
-        # Add some sample routes for fallback
-        sample_routes = [
-            {
-                "name": "Route 1 to Safe Zone North", 
-                "coords": [[19.0760, 72.8777], [19.1000, 72.9000], [19.1200, 72.9200]],
-                "color": "red"
-            },
-            {
-                "name": "Route 2 to Safe Zone South", 
-                "coords": [[19.0760, 72.8777], [19.0500, 72.8500], [19.0300, 72.8300]],
-                "color": "blue"
-            },
-            {
-                "name": "Route 3 to Safe Zone East", 
-                "coords": [[19.0760, 72.8777], [19.0800, 72.9000], [19.0900, 72.9300]],
-                "color": "green"
-            }
-        ]
-        
-        for route in sample_routes:
-            folium.PolyLine(
-                locations=route["coords"],
-                color=route["color"],
-                weight=4,
-                opacity=0.8,
-                popup=route["name"]
-            ).add_to(m)
-        
-        folium.Marker(
-            location=[19.0760, 72.8777],
-            popup=f"Evacuation from: {region}",
-            icon=folium.Icon(color='orange', icon='home')
-        ).add_to(m)
-        
-        return m._repr_html_(), 200, {'Content-Type': 'text/html'}
-        
-    except Exception as e:
-        return f"""
-        <html><body style='font-family: Arial; padding: 20px; background: #f8d7da;'>
-        <h2>❌ Server Error</h2>
-        <p>Failed to generate evacuation map: {str(e)}</p>
-        <p>Make sure folium is installed: pip install folium</p>
-        </body></html>
-        """, 500
 
 @app.route("/map")
 def map_page():
@@ -531,69 +338,36 @@ def map_page():
                 "available_regions": MUMBAI_REGIONS[:10]
             }), 404
 
-        # Return enhanced static HTML map with real-time features
+        # Return enhanced static HTML map
         html_content = f"""
         <!DOCTYPE html>
         <html>
         <head>
             <title>Evacuation Map - {matched_region}</title>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
                 body {{ font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }}
                 .map-container {{ border: 2px solid #007bff; padding: 20px; border-radius: 10px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-                .route {{ margin: 10px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff; transition: all 0.3s; }}
-                .route:hover {{ background: #e3f2fd; transform: translateX(5px); }}
+                .route {{ margin: 10px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #007bff; }}
                 .high-risk {{ color: #dc3545; }}
                 .moderate-risk {{ color: #fd7e14; }}
                 .low-risk {{ color: #28a745; }}
-                .data-source {{ position: fixed; top: 10px; right: 10px; background: rgba(255,193,7,0.9); padding: 8px 12px; border-radius: 5px; font-size: 12px; z-index: 1000; }}
+                .data-source {{ position: fixed; top: 10px; right: 10px; background: rgba(255,193,7,0.9); padding: 8px 12px; border-radius: 5px; font-size: 12px; }}
                 .header {{ text-align: center; color: #007bff; margin-bottom: 20px; }}
                 .risk-badge {{ display: inline-block; padding: 5px 10px; border-radius: 15px; font-weight: bold; color: white; }}
-                .safety-score {{ background: #e8f5e8; padding: 3px 8px; border-radius: 10px; font-size: 12px; margin-left: 10px; }}
-                .real-time-status {{ position: fixed; top: 50px; right: 10px; background: rgba(40,167,69,0.9); color: white; padding: 5px 10px; border-radius: 5px; font-size: 11px; }}
-                .refresh-indicator {{ display: inline-block; animation: pulse 2s infinite; }}
-                @keyframes pulse {{ 0% {{ opacity: 1; }} 50% {{ opacity: 0.5; }} 100% {{ opacity: 1; }} }}
-                .route-stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 20px 0; }}
-                .stat-card {{ background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dee2e6; }}
-                .loading {{ opacity: 0.6; }}
             </style>
         </head>
         <body>
-            <div class="data-source">📋 Real-time Data <span class="refresh-indicator">●</span></div>
-            <div class="real-time-status" id="statusIndicator">🔄 Auto-refresh enabled</div>
+            <div class="data-source">📋 Static Fallback Data</div>
             <div class="map-container">
                 <div class="header">
-                    <h1>🗺️ Live Evacuation Map for {matched_region}</h1>
+                    <h1>🗺️ Evacuation Map for {matched_region}</h1>
                     <p><strong>Current Risk Level:</strong> 
                        <span class="risk-badge {FLOOD_RISK_DATA.get(matched_region, 'moderate')}-risk">
                            {FLOOD_RISK_DATA.get(matched_region, 'moderate').upper()}
                        </span>
-                       <span class="safety-score">Last updated: <span id="lastUpdate">{{'just now'}}</span></span>
                     </p>
                 </div>
-                
-                <div class="route-stats">
-                    <div class="stat-card">
-                        <h4>� Available Routes</h4>
-                        <h2 id="routeCount">{len(routes)}</h2>
-                    </div>
-                    <div class="stat-card">
-                        <h4>⚡ Fastest Route</h4>
-                        <h2 id="fastestRoute">{min([float(r['eta'].split()[0]) for r in routes]):.1f} min</h2>
-                    </div>
-                    <div class="stat-card">
-                        <h4>🛡️ Safest Route</h4>
-                        <h2 id="safestRoute">{max([r.get('safety_score', 0.5) for r in routes]):.2f}</h2>
-                    </div>
-                    <div class="stat-card">
-                        <h4>📍 Nearest Shelter</h4>
-                        <h2 id="nearestShelter">{min([r['distance_km'] for r in routes]):.1f} km</h2>
-                    </div>
-                </div>
-                
-                <h2>📍 Real-time Evacuation Routes:</h2>
-                <div id="routesContainer">
+                <h2>📍 Available Evacuation Routes:</h2>
         """
         
         routes = EVACUATION_ROUTES.get(matched_region, [
@@ -603,135 +377,35 @@ def map_page():
         ])
         
         for i, route in enumerate(routes):
-            safety_score = route.get('safety_score', 0.5)
             html_content += f"""
-                <div class="route" id="route{i}">
+                <div class="route">
                     <h3>🚗 Route {i+1}: To {route['destination']}</h3>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px;">
-                        <p><strong>📏 Distance:</strong> {route['distance_km']} km</p>
-                        <p><strong>⏱️ ETA:</strong> {route['eta']}</p>
-                        <p><strong>⚠️ Risk:</strong> 
-                           <span class="risk-badge {route['risk_level']}-risk">{route['risk_level'].upper()}</span>
-                        </p>
-                        <p><strong>🛡️ Safety Score:</strong> 
-                           <span class="safety-score">{safety_score:.2f}/1.00</span>
-                        </p>
-                    </div>
-                    <div style="margin-top: 10px; padding: 10px; background: #e8f5e8; border-radius: 5px;">
-                        <small>🚦 <strong>Live Status:</strong> Route open, traffic conditions normal</small>
-                    </div>
+                    <p><strong>📏 Distance:</strong> {route['distance_km']} km</p>
+                    <p><strong>⏱️ Estimated Time:</strong> {route['eta']}</p>
+                    <p><strong>⚠️ Destination Risk:</strong> 
+                       <span class="risk-badge {route['risk_level']}-risk">{route['risk_level'].upper()}</span>
+                    </p>
                 </div>
             """
         
         html_content += f"""
-                </div>
                 <div style="margin-top: 30px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
-                    <h3>💡 Emergency Instructions:</h3>
+                    <h3>💡 Instructions:</h3>
                     <ul>
-                        <li><strong>Choose the highest safety score route</strong> for maximum security</li>
-                        <li><strong>Monitor real-time updates</strong> - page refreshes automatically</li>
-                        <li>Keep emergency contacts ready: <strong>Police: 100 | Fire: 101 | Ambulance: 108</strong></li>
-                        <li>Carry essential supplies and identification documents</li>
-                        <li>Follow traffic alerts and road condition updates</li>
+                        <li>Choose the route with the lowest risk level</li>
+                        <li>Keep emergency contacts ready</li>
+                        <li>Follow traffic updates and road conditions</li>
+                        <li>Carry essential supplies and documents</li>
                     </ul>
-                    <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 5px;">
-                        <strong>⚡ Real-time Features:</strong>
-                        <ul style="margin: 5px 0;">
-                            <li>Auto-refresh every 2 minutes for latest route data</li>
-                            <li>Live traffic and road condition monitoring</li>
-                            <li>Dynamic safety score calculations</li>
-                            <li>Emergency alert integration</li>
-                        </ul>
-                    </div>
+                    <p><strong>🆘 Emergency Numbers:</strong> Fire: 101 | Police: 100 | Ambulance: 108</p>
                 </div>
             </div>
             <script>
-                let lastUpdateTime = new Date();
-                let refreshInterval;
-                let isRefreshing = false;
-                
-                function updateTimestamp() {{
-                    const now = new Date();
-                    const diff = Math.floor((now - lastUpdateTime) / 1000);
-                    const minutes = Math.floor(diff / 60);
-                    const seconds = diff % 60;
-                    
-                    let timeStr = '';
-                    if (minutes > 0) {{
-                        timeStr = `${{minutes}}m ${{seconds}}s ago`;
-                    }} else {{
-                        timeStr = `${{seconds}}s ago`;
-                    }}
-                    
-                    document.getElementById('lastUpdate').textContent = timeStr;
-                }}
-                
-                function refreshData() {{
-                    if (isRefreshing) return;
-                    
-                    isRefreshing = true;
-                    const statusEl = document.getElementById('statusIndicator');
-                    const container = document.querySelector('.map-container');
-                    
-                    statusEl.textContent = '🔄 Refreshing data...';
-                    container.classList.add('loading');
-                    
-                    // Simulate data refresh (in real implementation, this would fetch from API)
-                    setTimeout(() => {{
-                        lastUpdateTime = new Date();
-                        statusEl.textContent = '✅ Data updated';
-                        container.classList.remove('loading');
-                        
-                        // Update some dynamic values to show real-time changes
-                        const routes = document.querySelectorAll('.route');
-                        routes.forEach((route, i) => {{
-                            const statusDiv = route.querySelector('small');
-                            const conditions = ['traffic normal', 'light traffic', 'road clear', 'optimal conditions'];
-                            const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
-                            statusDiv.innerHTML = `🚦 <strong>Live Status:</strong> Route open, ${{randomCondition}}`;
-                        }});
-                        
-                        setTimeout(() => {{
-                            statusEl.textContent = '🔄 Auto-refresh enabled';
-                            isRefreshing = false;
-                        }}, 2000);
-                    }}, 1000);
-                }}
-                
-                function startRealTimeUpdates() {{
-                    // Update timestamp every second
-                    setInterval(updateTimestamp, 1000);
-                    
-                    // Refresh data every 2 minutes
-                    refreshInterval = setInterval(refreshData, 120000);
-                    
-                    // Manual refresh button functionality
-                    document.addEventListener('keydown', function(e) {{
-                        if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {{
-                            e.preventDefault();
-                            refreshData();
-                        }}
-                    }});
-                }}
-                
-                // Start real-time features
-                document.addEventListener('DOMContentLoaded', function() {{
-                    console.log('Real-time evacuation map loaded for {matched_region}');
-                    startRealTimeUpdates();
-                    
-                    // Show connection status
-                    console.log('✅ Real-time updates enabled - auto-refresh every 2 minutes');
-                }});
-                
-                // Handle page visibility changes (pause updates when tab is hidden)
-                document.addEventListener('visibilitychange', function() {{
-                    if (document.hidden) {{
-                        clearInterval(refreshInterval);
-                    }} else {{
-                        refreshInterval = setInterval(refreshData, 120000);
-                        refreshData(); // Immediate refresh when tab becomes visible
-                    }}
-                }});
+                console.log('Static evacuation map loaded for {matched_region}');
+                // Auto-refresh every 5 minutes for updated data
+                setTimeout(function() {{
+                    location.reload();
+                }}, 300000);
             </script>
         </body>
         </html>

@@ -59,9 +59,7 @@ PLACE = "Mumbai, India"
 ASSUMED_SPEED_KMPH = 25.0       # for ETA
 SAMPLE_FACTOR = 5               # sample 1/N edges for lighter HTML
 MAX_POIS_PER_CAT = 500          # cap per category to keep HTML smaller
-ROUTE_COUNT = 10                # default evacuation routes to draw (increased from 5)
-MAX_ROUTE_COUNT = 15            # maximum routes allowed for performance
-MIN_ROUTE_COUNT = 3             # minimum routes to show
+ROUTE_COUNT = 5                 # how many evacuation routes to draw
 
 # Risk color map
 RISK_COLOR = {
@@ -160,41 +158,12 @@ if not os.path.exists(GRAPHML):
 if not os.path.exists(CSV):
     raise SystemExit(f"❌ Missing {CSV} in current folder.")
 
-print("🚀 Checking road network availability...")
-G = None  # Lazy load when needed
-node_to_region = {}  # Lazy load when needed
-GRAPH_AVAILABLE = os.path.exists(GRAPHML)
-
-def load_graph_if_needed():
-    """Lazy load the road network graph when actually needed"""
-    global G, node_to_region
-    if G is None and GRAPH_AVAILABLE:
-        try:
-            print("🔄 Loading road network on demand...")
-            G = ox.load_graphml(GRAPHML)
-            # ensure we work on the largest *weakly* connected component (so routes exist)
-            largest_cc_nodes = max(nx.weakly_connected_components(G), key=len)
-            G = G.subgraph(largest_cc_nodes).copy()
-            print(f"✅ Graph loaded: {len(G.nodes)} nodes, {len(G.edges)} edges")
-            
-            # Now create node to region mapping
-            print("🔎 Assigning each graph node to nearest region...")
-            node_ids = np.array(list(G.nodes))
-            node_lons = np.array([G.nodes[n].get("x", G.nodes[n].get("lon")) for n in node_ids], dtype=float)
-            node_lats = np.array([G.nodes[n].get("y", G.nodes[n].get("lat")) for n in node_ids], dtype=float)
-            
-            # Map each node to its nearest region
-            for i, node_id in enumerate(node_ids):
-                distances = haversine_m(node_lons[i], node_lats[i], region_lons, region_lats)
-                closest_idx = np.argmin(distances)
-                node_to_region[node_id] = regions[closest_idx]
-                
-            print(f"✅ Node mapping complete: {len(node_to_region)} nodes mapped")
-            
-        except Exception as e:
-            print(f"❌ Failed to load graph: {e}")
-            raise
-    return G
+print("🚀 Loading road network (graphml)...")
+G = ox.load_graphml(GRAPHML)
+# ensure we work on the largest *weakly* connected component (so routes exist)
+largest_cc_nodes = max(nx.weakly_connected_components(G), key=len)
+G = G.subgraph(largest_cc_nodes).copy()
+print(f"✅ Graph: {len(G.nodes)} nodes, {len(G.edges)} edges")
 
 print("📄 Loading flood/regions CSV...")
 flood_df_raw = pd.read_csv(CSV)
@@ -205,6 +174,14 @@ region_lats = flood_df["latitude"].to_numpy()
 region_risks = flood_df["flood_risk_level"].tolist()
 n_regions = len(regions)
 print(f"✅ Regions: {n_regions}")
+
+# ----------------------------
+# Map: node -> nearest region (vectorized)
+# ----------------------------
+print("🔎 Assigning each graph node to nearest region...")
+node_ids = np.array(list(G.nodes))
+node_lons = np.array([G.nodes[n].get("x", G.nodes[n].get("lon")) for n in node_ids], dtype=float)
+node_lats = np.array([G.nodes[n].get("y", G.nodes[n].get("lat")) for n in node_ids], dtype=float)
 
 # distance matrix (regions x nodes)
 dist_stack = np.empty((n_regions, len(node_ids)), dtype=float)
@@ -260,23 +237,9 @@ for cat, (tag, icon, color) in POI_CATEGORIES.items():
 print("✅ POIs ready.")
 
 # ----------------------------
-# Enhanced Route finder with improved logic
+# Route finder (k nearest low-risk)
 # ----------------------------
-def get_k_nearest_low_risk_routes(user_area: str, G, flood_df, k=None):
-    """
-    Enhanced evacuation route finder with better logic for multiple routes
-    """
-    # Load graph if needed
-    if G is None:
-        G = load_graph_if_needed()
-    
-    # Use default if not specified, otherwise validate and limit k parameter
-    if k is None:
-        k = ROUTE_COUNT
-    k = max(MIN_ROUTE_COUNT, min(k, MAX_ROUTE_COUNT))
-    
-    print(f"🚀 Finding {k} evacuation routes for: {user_area}")
-    
+def get_k_nearest_low_risk_routes(user_area: str, G, flood_df, k=ROUTE_COUNT):
     all_areas = flood_df["areas"].unique().tolist()
     best_match, score = extract_best_match(user_area.strip().lower(), all_areas)
     if not best_match or score < 50:
@@ -286,9 +249,8 @@ def get_k_nearest_low_risk_routes(user_area: str, G, flood_df, k=None):
     start_lat, start_lon = float(start_row["latitude"]), float(start_row["longitude"])
     orig_node = nearest_node(G, start_lon, start_lat)
 
-    # Get both low and moderate risk areas (for better route diversity)
-    safe_df = flood_df[flood_df["flood_risk_level"].isin(["low", "moderate"])]
-    if safe_df.empty:
+    low_df = flood_df[flood_df["flood_risk_level"] == "low"]
+    if low_df.empty:
         return best_match, score, []
 
     # precompute dijkstra distances
@@ -297,80 +259,32 @@ def get_k_nearest_low_risk_routes(user_area: str, G, flood_df, k=None):
     except Exception:
         dists = {}
 
-    # Enhanced candidate selection with scoring system
+    # candidate destinations sorted by path distance
     candidates = []
-    for _, row in safe_df.iterrows():
+    for _, row in low_df.iterrows():
         node = nearest_node(G, float(row["longitude"]), float(row["latitude"]))
         d = dists.get(node, None)
         if d is not None:
-            # Calculate comprehensive score based on multiple factors
-            risk_multiplier = 1.0 if row["flood_risk_level"] == "low" else 1.3  # prefer low risk
-            distance_km = d / 1000.0
-            
-            # Score = (risk priority + distance factor + accessibility factor)
-            base_score = (1.0 / risk_multiplier) * (1.0 / (1.0 + distance_km * 0.1))
-            
-            candidates.append({
-                "area": row["areas"],
-                "node": node,
-                "distance": d,
-                "distance_km": distance_km,
-                "risk_level": row["flood_risk_level"],
-                "score": base_score
-            })
-    
+            candidates.append((row["areas"], node, d))
     if not candidates:
         return best_match, score, []
 
-    # Sort by comprehensive score (higher is better)
-    candidates.sort(key=lambda x: x["score"], reverse=True)
+    candidates.sort(key=lambda x: x[2])
 
-    # Enhanced route selection with diversity
+    # choose up to k distinct regions
     picked = []
     seen = set()
-    geographical_spread = []
-    
-    for candidate in candidates:
-        area = candidate["area"]
+    for area, node, d in candidates:
         if area in seen:
             continue
-            
-        # Check geographical diversity (avoid clustering all routes in one direction)
-        dest_row = flood_df[flood_df["areas"] == area].iloc[0]
-        dest_lat, dest_lon = float(dest_row["latitude"]), float(dest_row["longitude"])
-        
-        # Simple geographical spread check
-        too_close_to_existing = False
-        for existing_lat, existing_lon in geographical_spread:
-            if abs(dest_lat - existing_lat) < 0.02 and abs(dest_lon - existing_lon) < 0.02:
-                too_close_to_existing = True
-                break
-        
-        # Accept route if it provides good geographical diversity or we need more routes
-        if not too_close_to_existing or len(picked) < k // 2:
-            seen.add(area)
-            picked.append(candidate)
-            geographical_spread.append((dest_lat, dest_lon))
-            
+        seen.add(area)
+        picked.append((area, node, d))
         if len(picked) >= k:
             break
 
-    # If we don't have enough routes, add more without geographical constraints
-    if len(picked) < k:
-        for candidate in candidates:
-            area = candidate["area"]
-            if area not in seen:
-                seen.add(area)
-                picked.append(candidate)
-                if len(picked) >= k:
-                    break
-
-    # Generate routes with enhanced metadata
     routes = []
-    for candidate in picked:
+    for area, node, d in picked:
         try:
-            area = candidate["area"]
-            node = candidate["node"]
             path = nx.shortest_path(G, orig_node, node, weight="length")
             length_m = route_length_m(G, path)
             eta_min = (length_m / 1000.0) / max(ASSUMED_SPEED_KMPH, 1) * 60.0
@@ -379,9 +293,7 @@ def get_k_nearest_low_risk_routes(user_area: str, G, flood_df, k=None):
                 "dest_node": int(node),
                 "path": path,
                 "distance_km": round(length_m / 1000.0, 3),
-                "eta_min": round(eta_min, 1),
-                "risk_level": candidate["risk_level"],
-                "safety_score": round(candidate["score"], 3)
+                "eta_min": round(eta_min, 1)
             })
         except Exception:
             continue
