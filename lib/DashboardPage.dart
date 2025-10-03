@@ -2,7 +2,7 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'user_service.dart';
 import 'UserSetupPage.dart';
-import 'fastapi_flood_service.dart';
+import 'backend_api_service.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -42,9 +42,9 @@ class _DashboardPageState extends State<DashboardPage> {
       String userArea = userData?['area']?.toString() ?? userWard;
 
       if (userArea != 'Ward') {
-        final prediction = await FastApiFloodService.predict(userArea);
+        final prediction = await BackendApiService.predictFlood(userArea);
         setState(() {
-          currentRisk = prediction['flood_risk'] ?? 'Unknown';
+          currentRisk = prediction['risk_level'] ?? 'Unknown';
           // Use real water level from API instead of hardcoded calculation
           waterLevel = '${prediction['water_level'] ?? 2.0}m';
           isLoadingData = false;

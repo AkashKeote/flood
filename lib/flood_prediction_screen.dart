@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'mumbai_areas.dart';
 import 'user_service.dart';
-import 'fastapi_flood_service.dart';
+import 'flood_prediction_service.dart';
 
 class FloodPredictionScreen extends StatefulWidget {
   const FloodPredictionScreen({super.key});
@@ -18,6 +18,9 @@ class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
   List<String> _availableAreas = [];
   bool _loadingAreas = true;
   Map<String, dynamic>? _predictionData;
+  bool _bulkUpdating = false;
+  int _bulkUpdatedCount = 0;
+  int _bulkTotalCount = 0;
 
   @override
   void initState() {
@@ -34,53 +37,82 @@ class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
   }
 
   Future<void> _loadAvailableAreas() async {
-    // Use static Mumbai areas list to ensure consistency with UserSetupPage
-    setState(() {
-      _availableAreas = MumbaiAreas.list;
-      _loadingAreas = false;
-    });
-    print('Using Mumbai areas list with ${MumbaiAreas.list.length} areas');
-    print('Mulund in list: ${MumbaiAreas.list.contains('Mulund')}');
+    try {
+      final areas = await FloodPredictionService.getAvailableAreas();
+      setState(() {
+        _availableAreas = areas;
+        _loadingAreas = false;
+      });
+      print('✅ Loaded ${areas.length} areas for prediction');
+    } catch (e) {
+      print('⚠️ Error loading areas, using fallback: $e');
+      setState(() {
+        _availableAreas = MumbaiAreas.list;
+        _loadingAreas = false;
+      });
+    }
   }
 
   Future<void> _getPrediction() async {
     if (_userArea == null) return;
+    
     setState(() {
       _predicting = true;
       _predictionResult = 'Predicting for ' + _userArea! + '...';
     });
+
     try {
-      print('🔍 Predicting for selected area: $_userArea');
-      final res = await FastApiFloodService.predict(_userArea!);
-      final risk = (res['flood_risk'] ?? 'Unknown').toString();
-      final date = (res['date'] ?? '').toString();
-      final rain = (res['rainfall'] ?? 0).toString();
-      final matched = (res['matched_area'] ?? _userArea).toString();
-      final score = (res['match_score'] ?? 0).toString();
-
-      print('📊 Backend returned matched_area: $matched');
-      print('🎯 Will show selected area: $_userArea');
-
-      setState(() {
-        _predictionData = res;
-        _predictionResult =
-            'City: ' +
-            _userArea! + // Show selected area instead of matched area
-            '\nDate: ' +
-            date +
-            '\nFlood risk: ' +
-            risk +
-            '\nRainfall: ' +
-            rain +
-            ' mm\nMatch score: ' +
-            score +
-            '%';
-      });
+      // Use the new prediction service
+      final result = await FloodPredictionService.getPredictionAndUpdate(_userArea!);
+      
+      if (result['success'] == true) {
+        setState(() {
+          _predictionData = result;
+          _predictionResult = result['display_message'];
+        });
+        
+        // Show success snackbar
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Prediction completed for $_userArea'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _predictionResult = result['display_message'] ?? 'Prediction failed';
+          _predictionData = null;
+        });
+        
+        // Show error snackbar
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Prediction failed: ${result['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
     } catch (e) {
       setState(() {
         _predictionResult = 'Error: ' + e.toString();
         _predictionData = null;
       });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } finally {
       setState(() {
         _predicting = false;
@@ -326,7 +358,7 @@ class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    if (_predictionData != null) ...[
+                    if (_predictionData != null && !_bulkUpdating) ...[
                       _buildPredictionCard(),
                     ] else
                       Container(
@@ -335,25 +367,67 @@ class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
                           color: const Color(0xFFF7F6F2),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Text(
-                          _predictionResult,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFF22223B),
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        child: _bulkUpdating
+                            ? Column(
+                                children: [
+                                  CircularProgressIndicator(
+                                    value: _bulkTotalCount > 0 
+                                        ? _bulkUpdatedCount / _bulkTotalCount 
+                                        : null,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      const Color(0xFF4CAF50),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    _predictionResult,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      color: Color(0xFF22223B),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              )
+                            : Text(
+                                _predictionResult,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  color: Color(0xFF22223B),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                       ),
                     const SizedBox(height: 20),
-                    _ComicButton(
-                      onPressed: _predicting || _userArea == null
-                          ? null
-                          : () {
-                              _getPrediction();
-                            },
-                      label: 'Get AI Prediction',
-                      color: const Color(0xFFB5C7F7),
-                      icon: Icons.psychology_rounded,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ComicButton(
+                            onPressed: _predicting || _userArea == null
+                                ? null
+                                : () {
+                                    _getPrediction();
+                                  },
+                            label: 'Get AI Prediction',
+                            color: const Color(0xFFB5C7F7),
+                            icon: Icons.psychology_rounded,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _ComicButton(
+                            onPressed: _bulkUpdating
+                                ? null
+                                : () {
+                                    _bulkUpdateAllAreas();
+                                  },
+                            label: _bulkUpdating ? 'Updating...' : 'Update All Areas',
+                            color: const Color(0xFF4CAF50),
+                            icon: Icons.update_rounded,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -370,12 +444,10 @@ class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
   Widget _buildPredictionCard() {
     if (_predictionData == null) return const SizedBox.shrink();
 
-    final risk = _predictionData!['flood_risk']?.toString() ?? 'Unknown';
-    final area =
-        _userArea ?? 'Unknown'; // Show selected area instead of matched area
-    final date = _predictionData!['date']?.toString() ?? 'Unknown';
-    final rainfall = _predictionData!['rainfall']?.toString() ?? '0';
-    final matchScore = _predictionData!['match_score']?.toString() ?? '0';
+    final risk = _predictionData!['risk_level']?.toString() ?? 'Unknown';
+    final area = _predictionData!['ward']?.toString() ?? _userArea ?? 'Unknown';
+    final confidence = _predictionData!['confidence']?.toString() ?? '0';
+    final source = _predictionData!['source']?.toString() ?? 'Backend';
 
     Color riskColor = _getRiskColor(risk);
     IconData riskIcon = _getRiskIcon(risk);
@@ -462,18 +534,18 @@ class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
             children: [
               Expanded(
                 child: _buildDetailItem(
-                  'Date',
-                  date,
-                  Icons.calendar_today,
+                  'Source',
+                  source,
+                  Icons.data_usage,
                   const Color(0xFFD6EAF8),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _buildDetailItem(
-                  'Rainfall',
-                  '$rainfall mm',
-                  Icons.water_drop,
+                  'Confidence',
+                  '${(double.tryParse(confidence) ?? 0.0).toStringAsFixed(0)}%',
+                  Icons.analytics,
                   const Color(0xFFD6EAF8),
                 ),
               ),
@@ -486,17 +558,17 @@ class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
             children: [
               Expanded(
                 child: _buildDetailItem(
-                  'Match Score',
-                  '$matchScore%',
-                  Icons.analytics,
+                  'Ward',
+                  area,
+                  Icons.location_city,
                   const Color(0xFFF9E79F),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _buildDetailItem(
-                  'Confidence',
-                  _getConfidenceLevel(double.tryParse(matchScore) ?? 0),
+                  'Risk Level',
+                  _getConfidenceLevel(double.tryParse(confidence) ?? 0.0),
                   Icons.psychology,
                   const Color(0xFFF9E79F),
                 ),
@@ -583,6 +655,85 @@ class _FloodPredictionScreenState extends State<FloodPredictionScreen> {
     if (score >= 60) return 'Low';
     return 'Very Low';
   }
+
+  /// Bulk update all areas with AI predictions
+  Future<void> _bulkUpdateAllAreas() async {
+    setState(() {
+      _bulkUpdating = true;
+      _bulkUpdatedCount = 0;
+      _bulkTotalCount = _availableAreas.length;
+      _predictionResult = 'Preparing bulk update...';
+    });
+
+    try {
+      print('🚀 Starting bulk update for ${_availableAreas.length} areas...');
+      
+      // Use the new bulk update service
+      final result = await FloodPredictionService.bulkUpdateAllAreas(
+        areas: _availableAreas,
+        onProgress: (status, current, total) {
+          setState(() {
+            _predictionResult = status;
+            _bulkUpdatedCount = current;
+            _bulkTotalCount = total;
+          });
+        },
+      );
+      
+      if (result['success'] == true) {
+        setState(() {
+          _predictionResult = result['summary'];
+          _bulkUpdatedCount = result['success_count'];
+          _bulkTotalCount = result['total'];
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Bulk update completed: ${result['success_count']}/${result['total']} areas updated'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _predictionResult = result['summary'] ?? 'Bulk update failed';
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Bulk update failed: ${result['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+      
+    } catch (e) {
+      setState(() {
+        _predictionResult = 'Bulk update failed: $e';
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bulk update failed: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _bulkUpdating = false;
+      });
+    }
+  }
+
+
 }
 
 class _ComicStatCard extends StatelessWidget {

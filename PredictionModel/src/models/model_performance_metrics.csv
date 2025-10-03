@@ -1,0 +1,2 @@
+timestamp,best_model,model_accuracy,validation_accuracy,total_features,training_samples,test_samples,prediction_confidence_mean,prediction_confidence_std
+2025-09-26T15:35:36.184869,XGBoost,0.8548888888888889,0.8016771488469602,17,9270,1414,0.58906114,0.12695265

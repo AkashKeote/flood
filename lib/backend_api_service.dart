@@ -3,9 +3,9 @@ import 'package:http/http.dart' as http;
 
 /// Service to interact with local backend APIs
 class BackendApiService {
-  // Local backend URL
-  static const String baseUrl = 'http://127.0.0.1:5000';
-  
+  // Local FastAPI URL (PredictionModel/src/api.py defaults to 7860)
+  static const String baseUrl = 'http://127.0.0.1:7860';
+
   // Common headers for API requests
   static const Map<String, String> _headers = {
     'Content-Type': 'application/json',
@@ -30,45 +30,65 @@ class BackendApiService {
     }
   }
 
-  /// Get flood risk prediction for a ward/region
+  /// Get flood risk prediction for a ward/region (maps FastAPI -> app contract)
   static Future<Map<String, dynamic>> predictFlood(String wardName) async {
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/predict_flood'),
-        headers: _headers,
-        body: jsonEncode({
-          'ward_name': wardName,
-        }),
-      );
+      final uri = Uri.parse(
+        '$baseUrl/predict',
+      ).replace(queryParameters: {'area': wardName});
+      final response = await http.get(uri, headers: _headers);
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // FastAPI fields
+        final String area = (data['area'] ?? wardName).toString();
+        final String matchedArea = (data['matched_area'] ?? area).toString();
+        final String floodRisk = (data['flood_risk'] ?? 'unknown').toString();
+        final double confidence0to1 = (data['confidence'] is num)
+            ? (data['confidence'] as num).toDouble()
+            : double.tryParse(data['confidence']?.toString() ?? '') ?? 0.0;
+
+        // Convert to percentage for UI expectations
+        final double confidencePct = (confidence0to1 * 100).clamp(0, 100);
+
+        // Optional message/source
+        final String modelVersion = (data['model_version'] ?? '').toString();
+        final String message = 'Model: ' + modelVersion;
+
+        return {
+          'ward': matchedArea,
+          'risk_level': floodRisk,
+          'confidence': confidencePct,
+          'message': message,
+          'source': 'FastAPI ML',
+        };
       } else {
-        final error = jsonDecode(response.body);
+        final error = _safeJson(response.body);
         throw Exception(error['error'] ?? 'Failed to predict flood risk');
       }
     } catch (e) {
-      throw Exception('Network error during flood prediction: $e');
+      throw Exception('Network error during flood prediction: ' + e.toString());
     }
   }
 
-  /// Get list of available regions
+  /// Get list of available regions (FastAPI `/areas`)
   static Future<List<String>> getRegions() async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/regions'),
+        Uri.parse('$baseUrl/areas'),
         headers: _headers,
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return List<String>.from(data['regions'] ?? []);
+        return List<String>.from(data['areas'] ?? []);
       } else {
-        final error = jsonDecode(response.body);
+        final error = _safeJson(response.body);
         throw Exception(error['error'] ?? 'Failed to get regions');
       }
     } catch (e) {
-      throw Exception('Network error during region fetch: $e');
+      throw Exception('Network error during region fetch: ' + e.toString());
     }
   }
 
@@ -78,14 +98,11 @@ class BackendApiService {
     int routeCount = 5,
   }) async {
     try {
-      // Use the working server (port 5000) with fixed app_core
+      // Use the Flask evacuation server (port 5000)
       final response = await http.post(
-        Uri.parse('$baseUrl/routes'),
+        Uri.parse('http://127.0.0.1:5000/routes'),
         headers: _headers,
-        body: jsonEncode({
-          'region': region,
-          'route_count': routeCount,
-        }),
+        body: jsonEncode({'region': region, 'route_count': routeCount}),
       );
 
       if (response.statusCode == 200) {
@@ -100,16 +117,18 @@ class BackendApiService {
   }
 
   /// Get evacuation map HTML for a region with route count
-  static Future<String> getEvacuationMap(String region, {int routeCount = 10}) async {
+  static Future<String> getEvacuationMap(
+    String region, {
+    int routeCount = 10,
+  }) async {
     try {
-      // Use the working server (port 5000)
-      String mapUrl = 'http://localhost:5000/live_map?region=$region&route_count=$routeCount';
-      
+      // Use the Flask evacuation server (port 5000)
+      String mapUrl =
+          'http://127.0.0.1:5000/live_map?region=$region&route_count=$routeCount';
+
       final response = await http.get(
         Uri.parse(mapUrl),
-        headers: {
-          'Accept': 'text/html,application/json',
-        },
+        headers: {'Accept': 'text/html,application/json'},
       );
 
       if (response.statusCode == 200) {
@@ -126,19 +145,7 @@ class BackendApiService {
           }
         }
       } else {
-        // Fallback to original server (port 5000)
-        final fallbackResponse = await http.get(
-          Uri.parse('$baseUrl/map?region=$region'),
-          headers: {
-            'Accept': 'text/html,application/json',
-          },
-        );
-        
-        if (fallbackResponse.statusCode == 200) {
-          return fallbackResponse.body;
-        } else {
-          throw Exception('Failed to get evacuation map: ${response.statusCode}');
-        }
+        throw Exception('Failed to get evacuation map: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Network error during map fetch: $e');
@@ -163,10 +170,21 @@ class BackendApiService {
     }
   }
 
+  // Helper to safely parse JSON error bodies
+  static Map<String, dynamic> _safeJson(String body) {
+    try {
+      final parsed = jsonDecode(body);
+      if (parsed is Map<String, dynamic>) return parsed;
+      return {'error': body};
+    } catch (_) {
+      return {'error': body};
+    }
+  }
+
   /// Test all API endpoints
   static Future<Map<String, dynamic>> testAllAPIs() async {
     Map<String, dynamic> results = {};
-    
+
     try {
       // Health check
       results['health'] = await healthCheck();
@@ -197,7 +215,9 @@ class BackendApiService {
 
     try {
       // Test evacuation routes
-      results['evacuation_routes'] = await getEvacuationRoutes(region: 'Andheri East');
+      results['evacuation_routes'] = await getEvacuationRoutes(
+        region: 'Andheri East',
+      );
     } catch (e) {
       results['evacuation_routes'] = {'error': e.toString()};
     }

@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import 'backend_api_service.dart';
 import 'mumbai_areas.dart';
 import 'user_service.dart';
+import 'csv_update_service.dart';
 
 class RoutePage extends StatefulWidget {
   const RoutePage({super.key});
@@ -28,6 +29,17 @@ class _RoutePageState extends State<RoutePage> {
   final bool _showPOIs = false;
   final String _selectedMapStyle = 'OpenStreetMap';
   String? _iframeViewType;
+  
+  // Real-time flood risk data
+  Map<String, String> _realTimeFloodRiskData = {};
+  bool _isLoadingFloodData = false;
+  DateTime? _lastFloodDataUpdate;
+
+  // Map layer controls
+  bool _showRoadsLayer = false;
+  bool _showRegionsLayer = true;
+  bool _showHospitalsLayer = true;
+  String _selectedBaseMap = 'Toner';
 
   // Individual POI category toggles
   final Map<String, bool> _selectedPOICategories = {
@@ -235,6 +247,59 @@ class _RoutePageState extends State<RoutePage> {
     'mahim': LatLng(19.0410, 72.8420),
     'mumbai central': LatLng(18.9685, 72.8205),
   };
+
+  /// Load real-time flood risk data from CSV
+  Future<void> _loadRealTimeFloodData() async {
+    setState(() {
+      _isLoadingFloodData = true;
+    });
+
+    try {
+      final areas = await CSVUpdateService.getAllAreas();
+      final Map<String, String> floodData = {};
+      
+      for (final areaData in areas) {
+        final areaName = areaData['area'] as String;
+        final riskLevel = areaData['flood_risk_level'] as String;
+        floodData[areaName.toLowerCase()] = riskLevel.toLowerCase();
+      }
+      
+      setState(() {
+        _realTimeFloodRiskData = floodData;
+        _lastFloodDataUpdate = DateTime.now();
+        _isLoadingFloodData = false;
+      });
+      
+      print('✅ Loaded ${floodData.length} flood risk areas from CSV');
+    } catch (e) {
+      print('❌ Error loading flood data: $e');
+      setState(() {
+        _isLoadingFloodData = false;
+        // Fallback to static data if CSV loading fails
+        _realTimeFloodRiskData = _floodRiskData;
+      });
+    }
+  }
+
+  /// Refresh flood data
+  Future<void> _refreshFloodData() async {
+    await _loadRealTimeFloodData();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('🔄 Flood risk data updated at ${DateTime.now().toString().substring(11, 19)}'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// Get current flood risk level for an area
+  String _getCurrentFloodRisk(String areaName) {
+    final normalizedName = areaName.toLowerCase();
+    return _realTimeFloodRiskData[normalizedName] ?? 
+           _floodRiskData[normalizedName] ?? 
+           'unknown';
+  }
 
   // Sample POI data for Mumbai areas - matching Streamlit categories
   List<Map<String, dynamic>> _getPOIMarkers() {
@@ -523,6 +588,7 @@ class _RoutePageState extends State<RoutePage> {
   @override
   void initState() {
     super.initState();
+    _loadRealTimeFloodData();
     _loadUserArea();
   }
 
@@ -597,11 +663,26 @@ class _RoutePageState extends State<RoutePage> {
 
         for (int i = 0; i < routesData.length; i++) {
           var routeData = routesData[i];
+          // distance may come as meters ('distance') or kilometers ('distance_km')
+          final dynamic rawDistanceMeters = routeData['distance'];
+          final dynamic rawDistanceKm = routeData['distance_km'];
+          double distanceKm = 0.0;
+          if (rawDistanceMeters != null) {
+            final double meters = (rawDistanceMeters is num)
+                ? rawDistanceMeters.toDouble()
+                : double.tryParse(rawDistanceMeters.toString()) ?? 0.0;
+            distanceKm = meters / 1000.0;
+          } else if (rawDistanceKm != null) {
+            distanceKm = (rawDistanceKm is num)
+                ? rawDistanceKm.toDouble()
+                : double.tryParse(rawDistanceKm.toString()) ?? 0.0;
+          }
+
           _routes.add(
             EvacuationRoute(
               id: i + 1,
               destination: routeData['destination'] ?? 'Unknown',
-              distanceKm: (routeData['distance_km'] ?? 0.0).toDouble(),
+              distanceKm: distanceKm,
               estimatedTimeMinutes: _parseTimeMinutes(
                 routeData['eta'] ?? '0 min',
               ),
@@ -1156,17 +1237,17 @@ class _RoutePageState extends State<RoutePage> {
                           Icon(
                             Icons.warning_amber,
                             color: _getRiskColor(
-                              _floodRiskData[_matchedLocation!] ?? 'unknown',
+                              _getCurrentFloodRisk(_matchedLocation!),
                             ),
                           ),
                           SizedBox(width: 8),
                           Text(
-                            'Current Risk Level: ${(_floodRiskData[_matchedLocation!] ?? 'unknown').toUpperCase()}',
+                            'Current Risk Level: ${_getCurrentFloodRisk(_matchedLocation!).toUpperCase()}',
                             style: GoogleFonts.poppins(
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                               color: _getRiskColor(
-                                _floodRiskData[_matchedLocation!] ?? 'unknown',
+                                _getCurrentFloodRisk(_matchedLocation!),
                               ),
                             ),
                           ),
@@ -1427,9 +1508,196 @@ class _RoutePageState extends State<RoutePage> {
                               color: Color(0xFF22223B),
                             ),
                           ),
+                          Spacer(),
+                          // Refresh button for flood data
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: IconButton(
+                              onPressed: _isLoadingFloodData ? null : _refreshFloodData,
+                              icon: _isLoadingFloodData 
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : Icon(
+                                    Icons.refresh,
+                                    color: Colors.blue[700],
+                                    size: 20,
+                                  ),
+                              tooltip: 'Refresh Flood Risk Data',
+                            ),
+                          ),
                         ],
                       ),
+                      if (_lastFloodDataUpdate != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Last updated: ${_lastFloodDataUpdate!.toString().substring(11, 19)}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ),
                       SizedBox(height: 16),
+
+                      // Map Layer Controls
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 8,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Map Layers',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF22223B),
+                              ),
+                            ),
+                            SizedBox(height: 12),
+
+                            // Base Map Style
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.layers,
+                                  size: 20,
+                                  color: Color(0xFF22223B),
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Base Map:',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    border: Border.all(
+                                      color: Colors.grey.shade300,
+                                    ),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children:
+                                        [
+                                          'OpenStreetMap',
+                                          'Light',
+                                          'Dark',
+                                          'Terrain',
+                                          'Toner',
+                                        ].map((style) {
+                                          return InkWell(
+                                            onTap: () {
+                                              setState(() {
+                                                _selectedBaseMap = style;
+                                              });
+                                            },
+                                            child: Container(
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 6,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: _selectedBaseMap == style
+                                                    ? Color(0xFF22223B)
+                                                    : Colors.transparent,
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                style,
+                                                style: TextStyle(
+                                                  color:
+                                                      _selectedBaseMap == style
+                                                      ? Colors.white
+                                                      : Color(0xFF22223B),
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            SizedBox(height: 12),
+
+                            // Layer toggles
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CheckboxListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    title: Text(
+                                      'Mumbai Roads - Flood Risk Heatmap',
+                                      style: GoogleFonts.poppins(fontSize: 12),
+                                    ),
+                                    value: _showRoadsLayer,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _showRoadsLayer = value ?? false;
+                                      });
+                                    },
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CheckboxListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    title: Text(
+                                      '🏥 Flood Risk Regions',
+                                      style: GoogleFonts.poppins(fontSize: 12),
+                                    ),
+                                    value: _showRegionsLayer,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _showRegionsLayer = value ?? true;
+                                      });
+                                    },
+                                    controlAffinity:
+                                        ListTileControlAffinity.leading,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      SizedBox(height: 16),
+
                       Row(
                         children: [
                           Expanded(
@@ -1459,8 +1727,20 @@ class _RoutePageState extends State<RoutePage> {
                                       // _errorText = null;
                                       _isLoading = true;
                                     });
+
+                                    // Construct URL with layer parameters
+                                    String layerParams = '';
+                                    layerParams +=
+                                        '&show_roads=${_showRoadsLayer ? 'true' : 'false'}';
+                                    layerParams +=
+                                        '&show_regions=${_showRegionsLayer ? 'true' : 'false'}';
+                                    layerParams +=
+                                        '&show_hospitals=${_showHospitalsLayer ? 'true' : 'false'}';
+                                    layerParams +=
+                                        '&base_map=${_selectedBaseMap.toLowerCase()}';
+
                                     final url =
-                                        "http://127.0.0.1:5000/map?region=$region";
+                                        "http://127.0.0.1:5000/map?region=$region&route_count=$_numRoutes$layerParams&no_animations=true";
                                     final viewType =
                                         "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
                                     // ignore: undefined_prefixed_name
@@ -1662,19 +1942,29 @@ class _RoutePageState extends State<RoutePage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            color: Color(0xFF22223B).withOpacity(0.7),
+        Expanded(
+          flex: 2,
+          child: Text(
+            label,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Color(0xFF22223B).withOpacity(0.7),
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
         ),
-        Text(
-          value,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF22223B),
+        SizedBox(width: 8),
+        Expanded(
+          flex: 1,
+          child: Text(
+            value,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF22223B),
+            ),
+            textAlign: TextAlign.end,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],
@@ -1687,16 +1977,26 @@ class _RoutePageState extends State<RoutePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            service,
-            style: GoogleFonts.poppins(fontSize: 14, color: Color(0xFF22223B)),
+          Expanded(
+            flex: 2,
+            child: Text(
+              service,
+              style: GoogleFonts.poppins(fontSize: 14, color: Color(0xFF22223B)),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          Text(
-            number,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.red,
+          SizedBox(width: 8),
+          Expanded(
+            flex: 1,
+            child: Text(
+              number,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+              ),
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -1800,6 +2100,7 @@ class _RouteMapPageState extends State<RouteMapPage> {
   String? _iframeViewType;
   bool _isLoading = false;
   String? _errorText;
+  int _numRoutes = 4; // Default route count for RouteMapPage
 
   void _loadMap() async {
     final region = _regionController.text.trim();
@@ -1815,8 +2116,11 @@ class _RouteMapPageState extends State<RouteMapPage> {
     });
 
     try {
-      // Use backend API to get evacuation map
-      final htmlContent = await BackendApiService.getEvacuationMap(region);
+      // Use backend API to get evacuation map with selected route count
+      final htmlContent = await BackendApiService.getEvacuationMap(
+        region,
+        routeCount: _numRoutes,
+      );
 
       final viewType = "mapFrame-${DateTime.now().millisecondsSinceEpoch}";
       // ignore: undefined_prefixed_name
@@ -1865,28 +2169,52 @@ class _RouteMapPageState extends State<RouteMapPage> {
         children: [
           Padding(
             padding: const EdgeInsets.all(8),
-            child: Row(
+            child: Column(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _regionController,
-                    decoration: InputDecoration(
-                      hintText: "Enter region name",
-                      border: const OutlineInputBorder(),
-                      errorText: _errorText,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _regionController,
+                        decoration: InputDecoration(
+                          hintText: "Enter region name",
+                          border: const OutlineInputBorder(),
+                          errorText: _errorText,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _isLoading ? null : _loadMap,
+                      child: _isLoading
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text("Show Map"),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _loadMap,
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text("Show Map"),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Text('Routes: $_numRoutes', style: TextStyle(fontSize: 16)),
+                    Expanded(
+                      child: Slider(
+                        value: _numRoutes.toDouble(),
+                        min: 1,
+                        max: 10,
+                        divisions: 9,
+                        label: _numRoutes.toString(),
+                        onChanged: (double value) {
+                          setState(() {
+                            _numRoutes = value.round();
+                          });
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
